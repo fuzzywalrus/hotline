@@ -39,7 +39,7 @@ public class HotlineFileDownloadClientNew {
   private let transferTotal: Int
   private var transferProgress: Progress
 
-  private var socket: NetSocketNew?
+  private var socket: NetSocket?
   private var downloadTask: Task<URL, Error>?
 
   // MARK: - Initialization
@@ -251,14 +251,14 @@ public class HotlineFileDownloadClientNew {
 
   // MARK: - Helper Methods
 
-  private func connectToTransferServer() async throws -> NetSocketNew {
+  private func connectToTransferServer() async throws -> NetSocket {
     guard let transferPort = NWEndpoint.Port(rawValue: serverPort + 1) else {
       throw NetSocketError.invalidPort
     }
 
     print("HotlineFileDownloadClientNew[\(referenceNumber)]: Connecting to \(serverAddress):\(serverPort + 1)")
 
-    let socket = try await NetSocketNew.connect(
+    let socket = try await NetSocket.connect(
       host: .name(serverAddress, nil),
       port: transferPort,
       tls: .disabled
@@ -268,7 +268,7 @@ public class HotlineFileDownloadClientNew {
     return socket
   }
 
-  private func sendMagicHeader(socket: NetSocketNew) async throws {
+  private func sendMagicHeader(socket: NetSocket) async throws {
     let header = Data(endian: .big) {
       "HTXF".fourCharCode()
       referenceNumber
