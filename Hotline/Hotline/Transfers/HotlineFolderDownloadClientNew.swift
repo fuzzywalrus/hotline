@@ -20,7 +20,7 @@ public class HotlineFolderDownloadClientNew {
   private let folderItemCount: Int
   private var transferSize: Int = 0
 
-  private var socket: NetSocketNew?
+  private var socket: NetSocket?
   private var downloadTask: Task<URL, Error>?
   private var folderProgress: Progress?
 
@@ -245,14 +245,14 @@ public class HotlineFolderDownloadClientNew {
 
   // MARK: - Helper Methods
 
-  private func connectToTransferServer() async throws -> NetSocketNew {
+  private func connectToTransferServer() async throws -> NetSocket {
     guard let transferPort = NWEndpoint.Port(rawValue: serverPort + 1) else {
       throw NetSocketError.invalidPort
     }
 
     print("HotlineFolderDownloadClientNew[\(referenceNumber)]: Connecting to \(serverAddress):\(serverPort + 1)")
 
-    let socket = try await NetSocketNew.connect(
+    let socket = try await NetSocket.connect(
       host: .name(serverAddress, nil),
       port: transferPort,
       tls: .disabled
@@ -262,7 +262,7 @@ public class HotlineFolderDownloadClientNew {
     return socket
   }
 
-  private func sendAction(socket: NetSocketNew, action: HotlineFolderAction) async throws {
+  private func sendAction(socket: NetSocket, action: HotlineFolderAction) async throws {
     let actionData = Data(endian: .big) {
       action.rawValue
     }
@@ -297,7 +297,7 @@ public class HotlineFolderDownloadClientNew {
   }
 
   private func downloadFile(
-    socket: NetSocketNew,
+    socket: NetSocket,
     fileName: String,
     parentPath: [String],
     destinationFolder: URL,
@@ -383,7 +383,7 @@ public class HotlineFolderDownloadClientNew {
 
         fileDataForkSize = Int(forkHeader.dataSize)
 
-        // Stream data fork using NetSocketNew's optimized file streaming
+        // Stream data fork using NetSocket's optimized file streaming
         let updates = await socket.receiveFile(to: fh, length: fileDataForkSize)
         for try await p in updates {
           // Calculate overall folder progress

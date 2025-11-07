@@ -188,7 +188,7 @@ struct HotlineServer: Identifiable, Hashable, NetSocketDecodable {
     hasher.combine(self.id)
   }
   
-  init(from socket: NetSocketNew, endian: Endian) async throws {
+  init(from socket: NetSocket, endian: Endian) async throws {
     // Read IP address (4 individual bytes)
     let ip1 = try await socket.read(UInt8.self)
     let ip2 = try await socket.read(UInt8.self)
@@ -986,7 +986,7 @@ extension HotlineTransaction: NetSocketDecodable {
   /// Decode a Hotline transaction directly from the socket stream
   ///
   /// Reads the 20-byte header, then reads and decodes the variable-length body with fields.
-  init(from socket: NetSocketNew, endian: Endian) async throws {
+  init(from socket: NetSocket, endian: Endian) async throws {
     // Read 20-byte header
     let flags = try await socket.read(UInt8.self)
     let isReply = try await socket.read(UInt8.self)
@@ -1173,7 +1173,7 @@ enum HotlineTransactionType: UInt16 {
 //  /// - Unused: 2 bytes
 //  /// - Server name: Pascal string (1-byte length + data)
 //  /// - Server description: Pascal string (1-byte length + data)
-//  init(from socket: NetSocketNew, endian: Endian) async throws {
+//  init(from socket: NetSocket, endian: Endian) async throws {
 //    // Read IP address (4 individual bytes)
 //    let ip1 = try await socket.read(UInt8.self)
 //    let ip2 = try await socket.read(UInt8.self)

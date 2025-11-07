@@ -1107,7 +1107,7 @@ extension FourCharCode {
 }
 
 
-extension NetSocketNew {
+extension NetSocket {
   /// Read a pascal string (1-byte length prefix followed by string data)
   ///
   /// This method reads a single byte for the length, then reads that many bytes and attempts
@@ -1145,7 +1145,7 @@ extension NetSocketNew {
     // Fallback to MacRoman for classic Mac compatibility
     guard let str = String(data: data, encoding: .macOSRoman) else {
       throw NetSocketError.decodeFailed(NSError(
-        domain: "NetSocketNew",
+        domain: "NetSocket",
         code: -1,
         userInfo: [NSLocalizedDescriptionKey: "Failed to decode pascal string with any known encoding"]
       ))

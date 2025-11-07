@@ -24,7 +24,7 @@ public class HotlineFileUploadClientNew {
   private let transferTotal: Int
   private var transferProgress: Progress
 
-  private var socket: NetSocketNew?
+  private var socket: NetSocket?
   private var uploadTask: Task<Void, Error>?
 
   // MARK: - Initialization
@@ -236,14 +236,14 @@ public class HotlineFileUploadClientNew {
 
   // MARK: - Helper Methods
 
-  private func connectToTransferServer() async throws -> NetSocketNew {
+  private func connectToTransferServer() async throws -> NetSocket {
     guard let transferPort = NWEndpoint.Port(rawValue: serverPort + 1) else {
       throw NetSocketError.invalidPort
     }
 
     print("HotlineFileUploadClientNew[\(referenceNumber)]: Connecting to \(serverAddress):\(serverPort + 1)")
 
-    let socket = try await NetSocketNew.connect(
+    let socket = try await NetSocket.connect(
       host: .name(serverAddress, nil),
       port: transferPort,
       tls: .disabled

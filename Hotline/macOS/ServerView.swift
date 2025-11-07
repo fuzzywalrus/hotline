@@ -135,6 +135,7 @@ struct ServerView: View {
           Text(error)
             .font(.caption)
             .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
         }
         .frame(maxWidth: 300)
         .padding()

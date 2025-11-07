@@ -4,7 +4,7 @@
 
 import Foundation
 
-public extension NetSocketNew {
+public extension NetSocket {
   
   /// Progress information for file uploads/downloads
   struct FileProgress: Sendable {

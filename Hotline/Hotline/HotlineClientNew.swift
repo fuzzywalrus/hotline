@@ -126,7 +126,7 @@ public struct HotlineServerInfo: Sendable {
 public actor HotlineClientNew {
   // MARK: - Properties
 
-  private let socket: NetSocketNew
+  private let socket: NetSocket
   private var serverInfo: HotlineServerInfo?
   private var isConnected: Bool = true
 
@@ -188,7 +188,7 @@ public actor HotlineClientNew {
 
     // Connect socket
     print("HotlineClientNew.connect(): Connecting socket...")
-    let socket = try await NetSocketNew.connect(host: host, port: port, tls: tls)
+    let socket = try await NetSocket.connect(host: host, port: port, tls: tls)
     print("HotlineClientNew.connect(): Socket connected")
 
     // Perform handshake
@@ -240,7 +240,7 @@ public actor HotlineClientNew {
     return client
   }
 
-  private init(socket: NetSocketNew) {
+  private init(socket: NetSocket) {
     self.socket = socket
 
     // Set up event stream

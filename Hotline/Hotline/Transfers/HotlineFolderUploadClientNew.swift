@@ -38,7 +38,7 @@ public class HotlineFolderUploadClientNew {
   private var folderItems: [FolderItem] = []
   private var totalItems: Int = 0
 
-  private var socket: NetSocketNew?
+  private var socket: NetSocket?
   private var uploadTask: Task<Void, Error>?
 
   // MARK: - Initialization
@@ -281,12 +281,12 @@ public class HotlineFolderUploadClientNew {
     progressHandler?(.completed(url: nil))
   }
 
-  private func connect(address: String, port: UInt16) async throws -> NetSocketNew {
+  private func connect(address: String, port: UInt16) async throws -> NetSocket {
     guard let transferPort = NWEndpoint.Port(rawValue: port + 1) else {
       throw NetSocketError.invalidPort
     }
 
-    return try await NetSocketNew.connect(
+    return try await NetSocket.connect(
       host: .name(address, nil),
       port: transferPort,
       tls: .disabled
@@ -361,7 +361,7 @@ public class HotlineFolderUploadClientNew {
     }
   }
 
-  private func readAction(socket: NetSocketNew) async throws -> HotlineFolderAction {
+  private func readAction(socket: NetSocket) async throws -> HotlineFolderAction {
     let actionData = try await socket.read(2)
     guard let rawAction = actionData.readUInt16(at: 0),
           let action = HotlineFolderAction(rawValue: rawAction) else {
@@ -371,7 +371,7 @@ public class HotlineFolderUploadClientNew {
   }
 
   private func uploadFile(
-    socket: NetSocketNew,
+    socket: NetSocket,
     fileURL: URL,
     itemNumber: Int,
     totalItems: Int,

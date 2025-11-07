@@ -101,7 +101,7 @@ public class HotlineFilePreviewClientNew {
 
     print("HotlineFilePreviewClientNew[\(referenceNumber)]: Connecting to \(serverAddress):\(serverPort + 1)")
 
-    let socket = try await NetSocketNew.connect(
+    let socket = try await NetSocket.connect(
       host: .name(serverAddress, nil),
       port: transferPort,
       tls: .disabled

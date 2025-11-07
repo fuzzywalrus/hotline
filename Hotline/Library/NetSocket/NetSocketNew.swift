@@ -1,4 +1,4 @@
-// NetSocketNew.swift
+// NetSocket.swift
 // Dustin Mierau • @mierau
 
 import Foundation
@@ -86,11 +86,9 @@ public enum NetSocketError: Error, CustomStringConvertible, Sendable {
   }
 }
 
-// MARK: - NetSocketNew
-
 /// An async/await TCP socket with automatic buffering and framing support
 ///
-/// NetSocketNew provides:
+/// NetSocket provides:
 /// - Async connection management
 /// - Automatic receive buffering with memory compaction
 /// - Type-safe reading/writing of integers, strings, and custom types
@@ -98,11 +96,11 @@ public enum NetSocketError: Error, CustomStringConvertible, Sendable {
 ///
 /// Example usage:
 /// ```swift
-/// let socket = try await NetSocketNew.connect(host: "example.com", port: 80)
+/// let socket = try await NetSocket.connect(host: "example.com", port: 80)
 /// try await socket.write("Hello\n".data(using: .utf8)!)
 /// let response = try await socket.readUntil(delimiter: .lineFeed)
 /// ```
-public actor NetSocketNew {
+public actor NetSocket {
   /// Configuration options for the socket
   public struct Config: Sendable {
     /// Size of chunks to receive from network at once (default: 64 KB)
@@ -153,9 +151,9 @@ public actor NetSocketNew {
   ///   - port: Network framework port
   ///   - tls: TLS policy (default: enabled with default settings)
   ///   - config: Socket configuration (default: standard settings)
-  /// - Returns: A connected and ready `NetSocketNew`
+  /// - Returns: A connected and ready `NetSocket`
   /// - Throws: Network errors or connection failures
-  public static func connect(host: NWEndpoint.Host, port: NWEndpoint.Port, tls: TLSPolicy = .enabled(), config: Config = .init()) async throws -> NetSocketNew {
+  public static func connect(host: NWEndpoint.Host, port: NWEndpoint.Port, tls: TLSPolicy = .enabled(), config: Config = .init()) async throws -> NetSocket {
     let parameters = NWParameters.tcp
     if tls.enabled {
       let tlsOptions = NWProtocolTLS.Options()
@@ -164,13 +162,13 @@ public actor NetSocketNew {
     }
 
     let conn = NWConnection(host: host, port: port, using: parameters)
-    let socket = NetSocketNew(connection: conn, config: config)
+    let socket = NetSocket(connection: conn, config: config)
     try await socket.start()
     return socket
   }
 
   /// Convenience wrapper to connect using string hostname and integer port
-  public static func connect(host: String, port: UInt16, tls: TLSPolicy = .enabled(), config: Config = .init()) async throws -> NetSocketNew {
+  public static func connect(host: String, port: UInt16, tls: TLSPolicy = .enabled(), config: Config = .init()) async throws -> NetSocket {
     guard let nwPort = NWEndpoint.Port(rawValue: port) else {
       throw NetSocketError.invalidPort
     }
@@ -506,7 +504,7 @@ public actor NetSocketNew {
         
         // 1. Open file and get length (blocking I/O, done off-actor)
         do {
-          total = Int(try NetSocketNew.fileLength(at: url))
+          total = Int(try NetSocket.fileLength(at: url))
           fh = try FileHandle(forReadingFrom: url)
         } catch {
           continuation.finish(throwing: NetSocketError.failed(underlying: error))
@@ -792,11 +790,11 @@ public actor NetSocketNew {
   }
   
   private func startReceiveLoop() {
-    @Sendable func loop(_ connection: NWConnection, chunk: Int, owner: NetSocketNew, connID: String) {
-      print("NetSocketNew[\(connID)]: Calling connection.receive(\(chunk)) to request more data...")
+    @Sendable func loop(_ connection: NWConnection, chunk: Int, owner: NetSocket, connID: String) {
+      print("NetSocket[\(connID)]: Calling connection.receive(\(chunk)) to request more data...")
       
       connection.receive(minimumIncompleteLength: 1, maximumLength: chunk) { [weak owner] data, _, isComplete, error in
-        print("NetSocketNew[\(connID)]: Receive callback - data: \(data?.count ?? 0) bytes, isComplete: \(isComplete), error: \(String(describing: error))")
+        print("NetSocket[\(connID)]: Receive callback - data: \(data?.count ?? 0) bytes, isComplete: \(isComplete), error: \(String(describing: error))")
         Task {
           guard let o = owner else {
             return
@@ -810,7 +808,7 @@ public actor NetSocketNew {
             await o.append(data, connID: connID)
           }
           if isComplete {
-            print("NetSocketNew[\(connID)]: EOF from peer.")
+            print("NetSocket[\(connID)]: EOF from peer.")
             await o.handleEOF()
             return
           }
@@ -952,7 +950,7 @@ public actor NetSocketNew {
   }
   
   private func append(_ data: Data, connID: String) {
-    print("NetSocketNew[\(connID)]: Received \(data.count) bytes from network, buffer now has \(buffer.count - head + data.count) available")
+    print("NetSocket[\(connID)]: Received \(data.count) bytes from network, buffer now has \(buffer.count - head + data.count) available")
     buffer.append(data)
     if buffer.count - head > config.maxBufferBytes {
       // Hard stop: drop connection rather than OOM'ing.
@@ -1038,7 +1036,7 @@ public protocol NetSocketEncodable: Sendable {
 ///   let id: UInt32
 ///   let name: String
 ///
-///   init(from socket: NetSocketNew, endian: Endian) async throws {
+///   init(from socket: NetSocket, endian: Endian) async throws {
 ///     self.id = try await socket.read(UInt32.self, endian: endian)
 ///     let nameLen = try await socket.read(UInt16.self, endian: endian)
 ///     let nameData = try await socket.readExactly(Int(nameLen))
@@ -1064,10 +1062,10 @@ public protocol NetSocketDecodable: Sendable {
   ///   - socket: Socket to read from
   ///   - endian: Byte order for multi-byte values
   /// - Throws: Network errors, insufficient data, or custom decoding errors
-  init(from socket: NetSocketNew, endian: Endian) async throws
+  init(from socket: NetSocket, endian: Endian) async throws
 }
 
-public extension NetSocketNew {
+public extension NetSocket {
   /// Send an encodable value to the socket
   ///
   /// The type encodes itself to binary data, which is then sent in a single write operation.
@@ -1109,7 +1107,7 @@ public extension NetSocketNew {
   ///   let id: UInt32
   ///   let name: String
   ///
-  ///   init(from socket: NetSocketNew, endian: Endian) async throws {
+  ///   init(from socket: NetSocket, endian: Endian) async throws {
   ///     self.id = try await socket.read(UInt32.self, endian: endian)
   ///     // Read variable-length string...
   ///   }
