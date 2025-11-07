@@ -15,14 +15,12 @@ private struct FolderItem {
   let isFolder: Bool
 }
 
-/// Modern async/await folder upload client for Hotline protocol
 @MainActor
 public class HotlineFolderUploadClientNew {
   // MARK: - Configuration
 
   public struct Configuration: Sendable {
     public var chunkSize: Int = 256 * 1024
-    public var publishProgress: Bool = true
     public init() {}
   }
 
@@ -163,7 +161,6 @@ public class HotlineFolderUploadClientNew {
     })
 
     progressHandler?(.connected)
-//    progressHandler?(.transfer(size: 0, total: self.transferTotal, progress: 0.0, speed: nil, estimate: nil))
 
     var completedItemCount = 0
     var totalBytesTransferred = 0
@@ -171,7 +168,7 @@ public class HotlineFolderUploadClientNew {
     var stage: UploadStage = .waitingForNextFile
     var currentItem: FolderItem?
 
-    // State machine loop - matches C++ client's goto-based state machine
+    // State machine loop
     while stage != .done {
       switch stage {
 
@@ -330,7 +327,6 @@ public class HotlineFolderUploadClientNew {
       }
     }
 
-    // Following C++ client behavior: Build hierarchy with root folder name prepended to all paths
     // Start from root folder with root name as first path component
     try walkFolder(at: folderURL, relativePath: [rootFolderName])
     totalItems = folderItems.count
@@ -339,8 +335,6 @@ public class HotlineFolderUploadClientNew {
   }
 
   private func encodeItemHeader(item: FolderItem) -> Data {
-    // Following C++ client behavior: Skip the first path component (root folder name)
-    // The C++ client does: startPtr += 2; startPtr += *startPtr + 1; pathCount--;
     let strippedPath = item.pathComponents.count > 1 ? Array(item.pathComponents.dropFirst()) : item.pathComponents
     let strippedPathCount = strippedPath.count
 
@@ -428,22 +422,17 @@ public class HotlineFolderUploadClientNew {
     bytesUploaded += HotlineFileForkHeader.DataSize
 
     // Send INFO fork data
-    print("HotlineFolderUploadClientNew[\(referenceNumber)]: Sending INFO fork (\(infoForkData.count) bytes)")
     try await socket.write(infoForkData)
     bytesUploaded += infoForkData.count
 
     // Create per-file progress for Finder
-    var fileProgress: Progress?
-    if config.publishProgress {
-      let progress = Progress(totalUnitCount: Int64(totalFileSize))
-      progress.fileURL = fileURL.resolvingSymlinksInPath()
-      progress.fileOperationKind = Progress.FileOperationKind.uploading
-      progress.publish()
-      fileProgress = progress
-    }
+    let fileProgress = Progress(totalUnitCount: Int64(totalFileSize))
+    fileProgress.fileURL = fileURL.resolvingSymlinksInPath()
+    fileProgress.fileOperationKind = Progress.FileOperationKind.uploading
+    fileProgress.publish()
 
     defer {
-      fileProgress?.unpublish()
+      fileProgress.unpublish()
     }
 
     // Send DATA fork if present
@@ -459,7 +448,7 @@ public class HotlineFolderUploadClientNew {
       let updates = await socket.writeFile(from: fileHandle, length: Int(dataForkSize))
       for try await p in updates {
         // Update per-file Finder progress
-        fileProgress?.completedUnitCount = Int64(bytesUploaded + p.sent)
+        fileProgress.completedUnitCount = Int64(bytesUploaded + p.sent)
 
         // Calculate overall folder progress
         let totalBytesNow = totalBytesTransferredSoFar + bytesUploaded + p.sent
@@ -503,7 +492,7 @@ public class HotlineFolderUploadClientNew {
       let updates = await socket.writeFile(from: resourceHandle, length: Int(resourceForkSize))
       for try await p in updates {
         // Update per-file Finder progress
-        fileProgress?.completedUnitCount = Int64(bytesUploaded + p.sent)
+        fileProgress.completedUnitCount = Int64(bytesUploaded + p.sent)
 
         // Calculate overall folder progress
         let totalBytesNow = totalBytesTransferredSoFar + bytesUploaded + p.sent
@@ -532,7 +521,6 @@ public class HotlineFolderUploadClientNew {
       bytesUploaded += Int(resourceForkSize)
     }
 
-    print("HotlineFolderUploadClientNew[\(referenceNumber)]: File upload complete, \(bytesUploaded) bytes sent")
     return bytesUploaded
   }
 }

@@ -1,10 +1,3 @@
-//
-//  HotlineFolderDownloadClientNew.swift
-//  Hotline
-//
-//  Modern async/await folder download client using NetSocketNew
-//
-
 import Foundation
 import Network
 
@@ -15,23 +8,13 @@ public struct HotlineFolderItemProgress: Sendable {
   public let totalItems: Int
 }
 
-/// Modern async/await folder download client for Hotline protocol
 @MainActor
 public class HotlineFolderDownloadClientNew {
-  // MARK: - Configuration
-
-  public struct Configuration: Sendable {
-    public var publishProgress: Bool = true
-    public init() {}
-  }
-
   // MARK: - Properties
 
   private let serverAddress: String
   private let serverPort: UInt16
   private let referenceNumber: UInt32
-
-  private let config: Configuration
 
   private let transferTotal: Int
   private let folderItemCount: Int
@@ -48,13 +31,11 @@ public class HotlineFolderDownloadClientNew {
     port: UInt16,
     reference: UInt32,
     size: UInt32,
-    itemCount: Int,
-    configuration: Configuration = .init()
+    itemCount: Int
   ) {
     self.serverAddress = address
     self.serverPort = port
     self.referenceNumber = reference
-    self.config = configuration
     self.transferTotal = Int(size)
     self.folderItemCount = itemCount
 
@@ -141,18 +122,11 @@ public class HotlineFolderDownloadClientNew {
     try fm.createDirectory(at: destinationURL, withIntermediateDirectories: true)
 
     // Create and publish progress for the entire folder (shows in Finder)
-    if config.publishProgress {
-      let progress = Progress(totalUnitCount: Int64(self.transferTotal))
-      progress.fileURL = destinationURL
-      progress.fileOperationKind = .downloading
-      progress.publish()
-      self.folderProgress = progress
-    }
-    defer {
-      // Unpublish progress when folder download completes
-      self.folderProgress?.unpublish()
-      self.folderProgress = nil
-    }
+    let progress = Progress(totalUnitCount: Int64(self.transferTotal))
+    progress.fileURL = destinationURL
+    progress.fileOperationKind = .downloading
+    progress.publish()
+    self.folderProgress = progress
 
     // Send initial magic header
     print("HotlineFolderDownloadClientNew[\(referenceNumber)]: Sending HTXF magic")

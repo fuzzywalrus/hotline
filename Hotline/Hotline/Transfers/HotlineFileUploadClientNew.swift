@@ -1,21 +1,13 @@
-//
-//  HotlineFileUploadClientNew.swift
-//  Hotline
-//
-//  Modern async/await file upload client using NetSocketNew
-//
-
 import Foundation
 import Network
 
-/// Modern async/await file upload client for Hotline protocol
 @MainActor
 public class HotlineFileUploadClientNew {
   // MARK: - Configuration
 
   public struct Configuration: Sendable {
     public var chunkSize: Int = 256 * 1024
-    public var publishProgress: Bool = true
+
     public init() {}
   }
 
@@ -186,11 +178,9 @@ public class HotlineFileUploadClientNew {
     progressHandler?(.transfer(name: filename, size: self.transferSize, total: self.transferTotal, progress: self.transferProgress.fractionCompleted, speed: nil, estimate: nil))
 
     // Configure progress for Finder if enabled
-    if config.publishProgress {
-      self.transferProgress.fileURL = fileURL.resolvingSymlinksInPath()
-      self.transferProgress.fileOperationKind = .uploading
-      self.transferProgress.publish()
-    }
+    self.transferProgress.fileURL = fileURL.resolvingSymlinksInPath()
+    self.transferProgress.fileOperationKind = .uploading
+    self.transferProgress.publish()
 
     // Send DATA fork if present
     if dataForkSize > 0 {

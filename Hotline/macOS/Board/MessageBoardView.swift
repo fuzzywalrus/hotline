@@ -8,91 +8,82 @@ struct MessageBoardView: View {
   
   var body: some View {
     NavigationStack {
-      if model.access?.contains(.canReadMessageBoard) != false {
-        ScrollView {
-          LazyVStack(alignment: .leading) {
-            ForEach(model.messageBoard, id: \.self) { msg in
-              Text(LocalizedStringKey(msg))
-                .tint(Color("Link Color"))
-                .lineLimit(100)
-                .lineSpacing(4)
-                .padding()
-                .textSelection(.enabled)
-              Divider()
-            }
-          }
-          Spacer()
+      if self.model.access?.contains(.canReadMessageBoard) != false {
+        if self.model.messageBoardLoaded && self.model.messageBoard.isEmpty {
+          self.emptyBoardView
         }
-        .task {
-          if !model.messageBoardLoaded {
-            let _ = try? await model.getMessageBoard()
-          }
+        else {
+          self.messageBoardView
         }
-        .overlay {
-          if !model.messageBoardLoaded {
-            VStack {
-              ProgressView()
-                .controlSize(.large)
-            }
-            .frame(maxWidth: .infinity)
-          }
-        }
-        .background(Color(nsColor: .textBackgroundColor))
       }
       else {
-        ZStack(alignment: .center) {
-          Text("No Message Board")
-            .font(.title)
-            .multilineTextAlignment(.center)
-            .foregroundStyle(.secondary)
-            .padding()
-        }
-        .frame(maxWidth: .infinity)
+        self.disabledBoardView
       }
     }
     .sheet(isPresented: $composerDisplayed) {
       MessageBoardEditorView()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .frame(idealWidth: 450, idealHeight: 350)
-//      RichTextEditor(text: $composerText)
-//        .richEditorFont(NSFont.systemFont(ofSize: 16.0))
-//        .richEditorAutomaticDashSubstitution(false)
-//        .richEditorAutomaticQuoteSubstitution(false)
-//        .richEditorAutomaticSpellingCorrection(false)
-//        .background(Color(nsColor: .textBackgroundColor))
-//        .frame(maxWidth: .infinity, maxHeight: .infinity)
-//        .frame(idealWidth: 450, idealHeight: 350)
-//        .toolbar {
-//          ToolbarItem(placement: .cancellationAction) {
-//            Button("Cancel") {
-//              composerDisplayed.toggle()
-//            }
-//          }
-//          
-//          ToolbarItem(placement: .primaryAction) {
-//            Button("Post") {
-//              composerDisplayed.toggle()
-//              let text = composerText
-//              composerText = ""
-//              model.postToMessageBoard(text: text)
-//              Task {
-//                await model.getMessageBoard()
-//              }
-//            }
-//          }
-//        }
     }
     .toolbar {
       ToolbarItem(placement:.primaryAction) {
         Button {
-          composerDisplayed.toggle()
+          self.composerDisplayed.toggle()
         } label: {
           Image(systemName: "square.and.pencil")
         }
-        .disabled(model.access?.contains(.canPostMessageBoard) == false)
+        .disabled(self.model.access?.contains(.canPostMessageBoard) == false)
         .help("Post to Message Board")
       }
     }
+    .task {
+      if !self.model.messageBoardLoaded {
+        let _ = try? await self.model.getMessageBoard()
+      }
+    }
+  }
+  
+  private var disabledBoardView: some View {
+    ContentUnavailableView {
+      Label("Message Board Disabled", systemImage: "quote.bubble")
+    } description: {
+      Text("This server has turned off the message board")
+    }
+  }
+  
+  private var emptyBoardView: some View {
+    ContentUnavailableView {
+      Label("No Posts", systemImage: "quote.bubble")
+    } description: {
+      Text("Message board posts will appear here")
+    }
+  }
+  
+  private var messageBoardView: some View {
+    ScrollView {
+      LazyVStack(alignment: .leading) {
+        ForEach(self.model.messageBoard, id: \.self) { msg in
+          Text(LocalizedStringKey(msg))
+            .tint(Color("Link Color"))
+            .lineLimit(100)
+            .lineSpacing(4)
+            .padding()
+            .textSelection(.enabled)
+          Divider()
+        }
+      }
+      Spacer()
+    }
+    .overlay {
+      if !self.model.messageBoardLoaded {
+        VStack {
+          ProgressView()
+            .controlSize(.large)
+        }
+        .frame(maxWidth: .infinity)
+      }
+    }
+    .background(Color(nsColor: .textBackgroundColor))
   }
 }
 

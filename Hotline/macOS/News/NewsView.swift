@@ -18,16 +18,7 @@ struct NewsView: View {
   var body: some View {
     Group {
       if model.serverVersion < 151 {
-        VStack {
-          Text("No News")
-            .bold()
-            .foregroundStyle(.secondary)
-            .font(.title3)
-          Text("This server has news turned off.")
-            .foregroundStyle(.tertiary)
-            .font(.system(size: 13))
-        }
-        .padding()
+        disabledNewsView
       }
       else {
         NavigationStack {
@@ -37,14 +28,7 @@ struct NewsView: View {
                 loadingIndicator
               }
               else if model.news.isEmpty {
-                ZStack(alignment: .center) {
-                  Text("No News")
-                    .font(.title)
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(.secondary)
-                    .padding()
-                }
-                .frame(maxWidth: .infinity)
+                emptyNewsView
               }
               else {
                 newsBrowser
@@ -142,7 +126,23 @@ struct NewsView: View {
     }
   }
   
-  var newsBrowser: some View {
+  private var disabledNewsView: some View {
+    ContentUnavailableView {
+      Label("No News", systemImage: "newspaper")
+    } description: {
+      Text("This server has turned off newsgroups")
+    }
+  }
+  
+  private var emptyNewsView: some View {
+    ContentUnavailableView {
+      Label("No News", systemImage: "newspaper")
+    } description: {
+      Text("This server has no newsgroups")
+    }
+  }
+  
+  private var newsBrowser: some View {
     List(model.news, id: \.self, selection: $selection) { newsItem in
       NewsItemView(news: newsItem, depth: 0).tag(newsItem.id)
     }
@@ -215,7 +215,7 @@ struct NewsView: View {
     }
   }
   
-  var loadingIndicator: some View {
+  private var loadingIndicator: some View {
     VStack {
       HStack {
         ProgressView {
@@ -227,7 +227,7 @@ struct NewsView: View {
     .frame(maxWidth: .infinity)
   }
   
-  var articleViewer: some View {
+  private var articleViewer: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: 0) {
         if let selection = selection, selection.type == .article {
