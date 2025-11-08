@@ -76,7 +76,7 @@ final class Bookmark {
   
   static let DefaultBookmarks: [Bookmark] = [
     Bookmark(type: .server, name: "The Mobius Strip", address: "mobius.trtphotl.com", port: HotlinePorts.DefaultServerPort),
-    Bookmark(type: .server, name: "System 7 Today", address: "hotline.system7today.com", port: HotlinePorts.DefaultServerPort),
+    Bookmark(type: .server, name: "MacDomain", address: "hotline.system7today.com", port: HotlinePorts.DefaultServerPort),
     Bookmark(type: .tracker, name: "Featured Servers", address: "hltracker.com", port: HotlinePorts.DefaultTrackerPort)
   ]
   
