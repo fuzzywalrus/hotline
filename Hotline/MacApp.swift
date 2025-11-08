@@ -71,10 +71,24 @@ struct Application: App {
   
   private var modelContainer: ModelContainer = {
     let schema = Schema([
-      Bookmark.self
+      Bookmark.self,
+      // ChatMessage.self
     ])
-    let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false, cloudKitDatabase: .private("iCloud.co.goodmake.hotline"))
-    let modelContainer = try! ModelContainer(for: schema, configurations: [config])
+    
+    // For records we want shared across devices.
+    let cloudKitConfiguration = ModelConfiguration(
+      schema: Schema([Bookmark.self]),
+      isStoredInMemoryOnly: false,
+      cloudKitDatabase: .private("iCloud.co.goodmake.hotline")
+    )
+    
+    // For records we only need stored locally.
+//    let localConfiguration = ModelConfiguration(
+//      schema: Schema([ChatMessage.self]),
+//      isStoredInMemoryOnly: false
+//    )
+    
+    let modelContainer = try! ModelContainer(for: schema, configurations: [cloudKitConfiguration])
     
     // Print local SwiftData sqlite file.
 //    print(modelContainer.configurations.first?.url.path(percentEncoded: false))
