@@ -334,7 +334,7 @@ class HotlineState: Equatable {
       print("HotlineState.login(): Status set to loggedIn")
 
       if Prefs.shared.playSounds && Prefs.shared.playLoggedInSound {
-        SoundEffectPlayer.shared.playSoundEffect(.loggedIn)
+        SoundEffects.play(.loggedIn)
       }
 
       print("HotlineState.login(): Connected to \(self.serverTitle)")
@@ -639,7 +639,7 @@ class HotlineState: Equatable {
     try await client.sendInstantMessage(text, to: userID)
 
     if Prefs.shared.playPrivateMessageSound {
-      SoundEffectPlayer.shared.playSoundEffect(.chatMessage)
+      SoundEffects.play(.chatMessage)
     }
   }
 
@@ -1776,7 +1776,7 @@ class HotlineState: Equatable {
 
   private func handleChatMessage(_ text: String) {
     if Prefs.shared.playSounds && Prefs.shared.playChatSound {
-      SoundEffectPlayer.shared.playSoundEffect(.chatMessage)
+      SoundEffects.play(.chatMessage)
     }
 
     let chatMessage = ChatMessage(text: text, type: .message, date: Date())
@@ -1798,14 +1798,14 @@ class HotlineState: Equatable {
       }
 
       if Prefs.shared.playSounds && Prefs.shared.playLeaveSound {
-        SoundEffectPlayer.shared.playSoundEffect(.userLogout)
+        SoundEffects.play(.userLogout)
       }
     }
   }
 
   private func handleServerMessage(_ message: String) {
     if Prefs.shared.playSounds && Prefs.shared.playChatSound {
-      SoundEffectPlayer.shared.playSoundEffect(.serverMessage)
+      SoundEffects.play(.serverMessage)
     }
 
     print("HotlineState: received server message:\n\(message)")
@@ -1820,9 +1820,9 @@ class HotlineState: Equatable {
 
       if Prefs.shared.playPrivateMessageSound {
         if self.unreadInstantMessages[userID] == nil {
-          SoundEffectPlayer.shared.playSoundEffect(.serverMessage)
+          SoundEffects.play(.serverMessage)
         } else {
-          SoundEffectPlayer.shared.playSoundEffect(.chatMessage)
+          SoundEffects.play(.chatMessage)
         }
       }
 
@@ -1854,7 +1854,7 @@ class HotlineState: Equatable {
       self.messageBoard.insert(message, at: 0)
     }
 
-    SoundEffectPlayer.shared.playSoundEffect(.newNews)
+    SoundEffects.play(.newNews)
   }
 
   // MARK: - User Management
@@ -1868,7 +1868,7 @@ class HotlineState: Equatable {
     } else {
       if !self.users.isEmpty {
         if Prefs.shared.playSounds && Prefs.shared.playJoinSound {
-          SoundEffectPlayer.shared.playSoundEffect(.userLogin)
+          SoundEffects.play(.userLogin)
         }
       }
 
