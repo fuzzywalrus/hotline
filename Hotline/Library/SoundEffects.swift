@@ -1,7 +1,7 @@
 import Foundation
-import AVFAudio
+import AppKit
 
-enum SoundEffects: String {
+enum SoundEffect: String {
   case loggedIn = "logged-in"
   case chatMessage = "chat-message"
   case transferComplete = "transfer-complete"
@@ -10,41 +10,32 @@ enum SoundEffects: String {
   case newNews = "new-news"
   case serverMessage = "server-message"
   case error = "error"
+  
+  static var all: [SoundEffect] = [.loggedIn, .chatMessage, .transferComplete, .userLogin, .userLogout, .newNews, .serverMessage, .error]
 }
 
 @Observable
-class SoundEffectPlayer: NSObject, AVAudioPlayerDelegate {
-  static let shared = SoundEffectPlayer()
+class SoundEffects {
+  static let shared = SoundEffects()
   
-  private var activeSounds: [AVAudioPlayer] = []
+  private var preloadedSounds: [SoundEffect: NSSound] = [:]
   
-  func playSoundEffect(_ name: SoundEffects) {
-    // Load a local sound file
-    guard let soundFileURL = Bundle.main.url(
-      forResource: name.rawValue,
-      withExtension: "aiff"
-    ) else {
-      return
-    }
-    
-    DispatchQueue.main.async { [weak self] in
-      guard let self = self else {
-        return
-      }
-      
-      if let soundEffect = try? AVAudioPlayer(contentsOf: soundFileURL) {
-        soundEffect.delegate = self
-        soundEffect.volume = 0.75
-        soundEffect.play()
-        
-        self.activeSounds.append(soundEffect)
+  private init() {
+    // Preload sound effects
+    for effect in SoundEffect.all {
+      if let soundFileURL = Bundle.main.url(forResource: effect.rawValue, withExtension: "aiff"),
+         let sound = NSSound(contentsOf: soundFileURL, byReference: true) {
+        sound.volume = 0.75
+        self.preloadedSounds[effect] = sound
       }
     }
   }
-
-  func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
-    if let i = self.activeSounds.firstIndex(of: player) {
-      self.activeSounds.remove(at: i)
-    }
+  
+  static func play(_ name: SoundEffect) {
+    Self.shared.play(name)
+  }
+  
+  func play(_ name: SoundEffect) {
+    self.preloadedSounds[name]?.play()
   }
 }
