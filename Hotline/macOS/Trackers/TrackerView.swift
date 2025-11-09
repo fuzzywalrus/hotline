@@ -480,7 +480,12 @@ struct TrackerView: View {
     Button {
       Bookmark.delete(bookmark, context: modelContext)
     } label: {
-      Label(bookmark.type == .tracker ? "Delete Tracker" : "Delete Bookmark", systemImage: "trash")
+      if bookmark.type == .tracker {
+        Label("Delete Tracker", systemImage: "xmark")
+      }
+      else {
+        Label("Delete Bookmark", systemImage: "bookmark.slash")
+      }
     }
   }
   

@@ -441,7 +441,6 @@
 			children = (
 				DAB4D8832B4CABEF0048A05C /* Extensions.swift */,
 				DA5268AA2EB11EA300DCB941 /* ColorArt.swift */,
-				DAE735062B3251B3000C56F6 /* SoundEffects.swift */,
 				DA55AC782BE6A1AD00034857 /* RegularExpressions.swift */,
 				DA6980822BFFD06C003E434B /* BookmarkDocument.swift */,
 				DA501BE02EBE844F001714F8 /* Views */,
@@ -494,6 +493,7 @@
 		DAC6B2DF2EAC6236004E2CBA /* Managers */ = {
 			isa = PBXGroup;
 			children = (
+				DAE735062B3251B3000C56F6 /* SoundEffects.swift */,
 				DAC6B2DE2EAC6236004E2CBA /* ChatStore.swift */,
 			);
 			path = Managers;

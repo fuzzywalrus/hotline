@@ -121,8 +121,10 @@ struct ServerView: View {
           self.connectForm
           Spacer()
         }
-//        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .navigationTitle("Connect to Server")
+        .onAppear {
+          self.focusedField = .address
+        }
       }
       else if case .failed(let error) = model.status {
         VStack {
@@ -250,40 +252,47 @@ struct ServerView: View {
   }
   
   var connectForm: some View {
-    Form {
-      HStack(alignment: .top, spacing: 10) {
-        Image("Server Large")
-          .resizable()
-          .scaledToFit()
-          .frame(width: 28, height: 28)
-        
-        VStack(alignment: .leading) {
-          Text("Connect to Server")
-          Text("Enter the address of a Hotline server to connect to.")
-            .foregroundStyle(.secondary)
-            .font(.subheadline)
+    VStack(alignment: .center, spacing: 0) {
+      Form {
+        HStack(alignment: .top, spacing: 10) {
+          Image("Server Large")
+            .resizable()
+            .scaledToFit()
+            .frame(width: 28, height: 28)
+          
+          VStack(alignment: .leading) {
+            Text("Connect to Server")
+            Text("Enter the address of a Hotline server to connect to.")
+              .foregroundStyle(.secondary)
+              .font(.subheadline)
+          }
         }
+        
+        TextField(text: $connectAddress) {
+          Text("Address")
+        }
+        .focused($focusedField, equals: .address)
+        
+        TextField(text: $connectLogin, prompt: Text("Optional")) {
+          Text("Login")
+        }
+        .focused($focusedField, equals: .login)
+        
+        SecureField(text: $connectPassword, prompt: Text("Optional")) {
+          Text("Password")
+        }
+        .focused($focusedField, equals: .password)
       }
-      
-      TextField(text: $connectAddress) {
-        Text("Address:")
-      }
-      .focused($focusedField, equals: .address)
-      
-      TextField(text: $connectLogin, prompt: Text("Optional")) {
-        Text("Login:")
-      }
-      .focused($focusedField, equals: .login)
-      SecureField(text: $connectPassword, prompt: Text("Optional")) {
-        Text("Password:")
-      }
-      .focused($focusedField, equals: .password)
+      .formStyle(.grouped)
+      .fixedSize(horizontal: false, vertical: true)
       
       HStack {
-        Button("Save...") {
+        Button {
           if !connectAddress.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             connectNameSheetPresented = true
           }
+        } label: {
+          Image(systemName: "bookmark.fill")
         }
         .disabled(connectAddress.isEmpty)
         .controlSize(.regular)
@@ -302,15 +311,12 @@ struct ServerView: View {
         Button("Connect") {
           connectToServer()
         }
-        
         .controlSize(.regular)
         .buttonStyle(.automatic)
         .keyboardShortcut(.defaultAction)
       }
-      .padding(.top, 8)
+      .padding(.horizontal, 20)
     }
-    .formStyle(.grouped)
-    .fixedSize(horizontal: false, vertical: true)
     .onChange(of: connectAddress) {
       let (a, p) = Server.parseServerAddressAndPort(connectAddress)
       server.address = a
@@ -322,14 +328,11 @@ struct ServerView: View {
     .onChange(of: connectPassword) {
       server.password = connectPassword
     }
-    .onAppear {
-      focusedField = .address
-    }
     .frame(maxWidth: 380)
     .padding()
     .sheet(isPresented: $connectNameSheetPresented) {
       VStack(alignment: .leading) {
-        Text("Name this server bookmark:")
+        Text("Save Bookmark")
           .foregroundStyle(.secondary)
           .padding(.bottom, 4)
         TextField("Bookmark Name", text: $connectName)
