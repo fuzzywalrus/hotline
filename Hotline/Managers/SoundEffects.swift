@@ -14,9 +14,12 @@ enum SoundEffect: String {
   static var all: [SoundEffect] = [.loggedIn, .chatMessage, .transferComplete, .userLogin, .userLogout, .newNews, .serverMessage, .error]
 }
 
-@Observable
 class SoundEffects {
   static let shared = SoundEffects()
+  
+  static func play(_ name: SoundEffect) {
+    Self.shared.play(name)
+  }
   
   private var preloadedSounds: [SoundEffect: NSSound] = [:]
   
@@ -29,10 +32,6 @@ class SoundEffects {
         self.preloadedSounds[effect] = sound
       }
     }
-  }
-  
-  static func play(_ name: SoundEffect) {
-    Self.shared.play(name)
   }
   
   func play(_ name: SoundEffect) {
