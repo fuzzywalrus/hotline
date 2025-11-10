@@ -57,6 +57,14 @@ final class AppState {
     // Remove from transfers list
     self.transfers.remove(at: transferIndex)
   }
+  
+  /// Cancel specified transfers
+  @MainActor
+  func cancelTransfers(ids: [UUID]) {
+    for transferID in ids {
+      self.cancelTransfer(id: transferID)
+    }
+  }
 
   /// Cancel all active transfers
   @MainActor
