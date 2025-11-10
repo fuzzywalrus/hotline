@@ -10,8 +10,6 @@ public struct HotlineFolderItemProgress: Sendable {
 
 @MainActor
 public class HotlineFolderDownloadClientNew: @MainActor HotlineTransferClient {
-  // MARK: - Properties
-
   private let serverAddress: String
   private let serverPort: UInt16
   private let referenceNumber: UInt32
@@ -129,14 +127,14 @@ public class HotlineFolderDownloadClientNew: @MainActor HotlineTransferClient {
     self.folderProgress = progress
 
     // Send initial magic header
-    print("HotlineFolderDownloadClientNew[\(referenceNumber)]: Sending HTXF magic")
+    print("HotlineFolderDownloadClientNew[\(self.referenceNumber)]: Sending HTXF magic")
     try await socket.write(Data(endian: .big) {
       "HTXF".fourCharCode()
       self.referenceNumber
       UInt32.zero           // data size = 0
       UInt16(1)             // type = 1 (folder transfer)
       UInt16.zero           // reserved = 0
-      HotlineFolderAction.nextFile.rawValue             // action = 3 (next file)
+      HotlineFolderAction.nextFile.rawValue // action = 3 (next file)
     })
 
     progressHandler?(.connected)
@@ -146,7 +144,7 @@ public class HotlineFolderDownloadClientNew: @MainActor HotlineTransferClient {
     var totalBytesTransferred = 0
 
     // Process each item in the folder
-    while completedItemCount < folderItemCount {
+    while completedItemCount < self.folderItemCount {
       // Read item header
       let headerLenData = try await socket.read(2)
       let headerLen = Int(headerLenData.readUInt16(at: 0)!)
@@ -154,7 +152,7 @@ public class HotlineFolderDownloadClientNew: @MainActor HotlineTransferClient {
 
       totalBytesTransferred += 2 + headerLen
 
-      guard let (itemType, pathComponents) = parseItemHeaderPath(headerData) else {
+      guard let (itemType, pathComponents) = self.parseItemHeaderPath(headerData) else {
         throw HotlineTransferClientError.failedToTransfer
       }
 
@@ -166,7 +164,7 @@ public class HotlineFolderDownloadClientNew: @MainActor HotlineTransferClient {
         if !pathComponents.isEmpty {
           let folderURL = destinationURL.appendingPathComponents(pathComponents)
           try fm.createDirectory(at: folderURL, withIntermediateDirectories: true)
-          print("HotlineFolderDownloadClientNew[\(referenceNumber)]: Created folder at \(folderURL.path)")
+          print("HotlineFolderDownloadClientNew[\(self.referenceNumber)]: Created folder at \(folderURL.path)")
         }
 
         completedItemCount += 1
@@ -246,16 +244,11 @@ public class HotlineFolderDownloadClientNew: @MainActor HotlineTransferClient {
   // MARK: - Helper Methods
 
   private func connectToTransferServer() async throws -> NetSocket {
-    guard let transferPort = NWEndpoint.Port(rawValue: serverPort + 1) else {
-      throw NetSocketError.invalidPort
-    }
-
     print("HotlineFolderDownloadClientNew[\(referenceNumber)]: Connecting to \(serverAddress):\(serverPort + 1)")
 
     let socket = try await NetSocket.connect(
-      host: .name(serverAddress, nil),
-      port: transferPort,
-      tls: .disabled
+      host: self.serverAddress,
+      port: self.serverPort + 1
     )
 
     print("HotlineFolderDownloadClientNew[\(referenceNumber)]: Connected!")

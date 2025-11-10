@@ -2,20 +2,16 @@ import Foundation
 import Network
 
 @MainActor
-public class HotlineFilePreviewClientNew {
-  // MARK: - Properties
-
+public class HotlineFilePreviewClient {
   private let serverAddress: String
   private let serverPort: UInt16
   private let referenceNumber: UInt32
   private let fileName: String
   private let transferSize: UInt32
 
-  private var downloadClient: HotlineFileDownloadClientNew?
+  private var downloadClient: HotlineFileDownloadClient?
   private var previewTask: Task<URL, Error>?
   private var temporaryFileURL: URL?
-
-  // MARK: - Initialization
 
   public init(
     fileName: String,
@@ -31,7 +27,7 @@ public class HotlineFilePreviewClientNew {
     self.transferSize = size
   }
 
-  // MARK: -
+  // MARK: - API
 
   /// Download file to temporary location for preview
   /// - Parameter progressHandler: Optional progress callback
@@ -51,7 +47,7 @@ public class HotlineFilePreviewClientNew {
       self.previewTask = nil
       return url
     } catch {
-      print("HotlineFilePreviewClientNew[\(referenceNumber)]: Failed to preview file: \(error)")
+      print("HotlineFilePreviewClient[\(referenceNumber)]: Failed to preview file: \(error)")
       self.previewTask = nil
       progressHandler?(.error(error))
       throw error
@@ -71,7 +67,7 @@ public class HotlineFilePreviewClientNew {
     self.cleanupTempFile()
   }
 
-  // MARK: - Private Implementation
+  // MARK: - Implementation
 
   private func performPreview(
     progressHandler: (@Sendable (HotlineTransferProgress) -> Void)?
@@ -83,28 +79,22 @@ public class HotlineFilePreviewClientNew {
     let tempFileURL = tempDir.appendingPathComponent(uniqueFileName)
     self.temporaryFileURL = tempFileURL
 
-    print("HotlineFilePreviewClientNew[\(referenceNumber)]: Downloading to temp: \(tempFileURL.path)")
+    print("HotlineFilePreviewClient[\(self.referenceNumber)]: Downloading to temp: \(tempFileURL.path)")
 
     progressHandler?(.connecting)
 
     // Connect to transfer server
-    guard let transferPort = NWEndpoint.Port(rawValue: serverPort + 1) else {
-      throw NetSocketError.invalidPort
-    }
-
-    print("HotlineFilePreviewClientNew[\(referenceNumber)]: Connecting to \(serverAddress):\(serverPort + 1)")
-
+    print("HotlineFilePreviewClient[\(self.referenceNumber)]: Connecting to \(self.serverAddress):\(self.serverPort + 1)")
     let socket = try await NetSocket.connect(
-      host: .name(serverAddress, nil),
-      port: transferPort,
-      tls: .disabled
+      host: self.serverAddress,
+      port: self.serverPort + 1
     )
     defer { Task { await socket.close() } }
 
-    print("HotlineFilePreviewClientNew[\(referenceNumber)]: Connected!")
+    print("HotlineFilePreviewClient[\(self.referenceNumber)]: Connected!")
 
     // Send magic header for raw data download
-    print("HotlineFilePreviewClientNew[\(referenceNumber)]: Sending magic header")
+    print("HotlineFilePreviewClient[\(self.referenceNumber)]: Sending magic header")
     try await socket.write(Data(endian: .big) {
       "HTXF".fourCharCode()
       self.referenceNumber
@@ -115,7 +105,7 @@ public class HotlineFilePreviewClientNew {
     progressHandler?(.connected)
 
     // Stream raw data directly to temp file with progress tracking
-    print("HotlineFilePreviewClientNew[\(referenceNumber)]: Streaming \(transferSize) bytes to temp file")
+    print("HotlineFilePreviewClient[\(self.referenceNumber)]: Streaming \(transferSize) bytes to temp file")
 
     let totalSize = Int(transferSize)
 
@@ -139,18 +129,18 @@ public class HotlineFilePreviewClientNew {
 
     progressHandler?(.completed(url: tempFileURL))
 
-    print("HotlineFilePreviewClientNew[\(referenceNumber)]: Preview file ready at \(tempFileURL.path)")
+    print("HotlineFilePreviewClient[\(self.referenceNumber)]: Preview file ready at \(tempFileURL.path)")
 
     return tempFileURL
   }
 
   private func cleanupTempFile() {
-    guard let tempURL = temporaryFileURL else { return }
-
+    guard let tempURL = self.temporaryFileURL else { return }
+    self.temporaryFileURL = nil
+    
     // Delete the temp file
     try? FileManager.default.removeItem(at: tempURL)
-
-    temporaryFileURL = nil
-    print("HotlineFilePreviewClientNew[\(referenceNumber)]: Cleaned up temp file")
+    
+    print("HotlineFilePreviewClient[\(self.referenceNumber)]: Cleaned up temp file")
   }
 }

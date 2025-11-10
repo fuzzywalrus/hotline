@@ -9,7 +9,7 @@ struct TrackerConnectView: View {
   @State private var address = ""
   @State private var login = ""
   @State private var password = ""
-//  @State private var connecting = false
+  //  @State private var connecting = false
   
   func connectionStatusToProgress(status: HotlineClientStatus) -> Double {
     switch status {
@@ -27,116 +27,116 @@ struct TrackerConnectView: View {
   }
   
   var body: some View {
-      VStack(alignment: .leading) {
-        if self.model.status == .disconnected {
-          TextField("Server Address", text: $address)
-            .keyboardType(.URL)
-            .disableAutocorrection(true)
-            .frame(height: 48)
-            .textFieldStyle(.plain)
-            .padding(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
-            .background {
-              Color.black.cornerRadius(8).blendMode(.overlay)
-            }
-          TextField("Login", text: $login)
-            .disableAutocorrection(true)
-            .frame(height: 48)
-            .textFieldStyle(.plain)
-            .padding(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
-            .background {
-              Color.black.cornerRadius(8).blendMode(.overlay)
-            }
-          SecureField("Password", text: $password)
-            .disableAutocorrection(true)
-            .textFieldStyle(.plain)
-            .frame(height: 48)
-            .padding(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
-            .background {
-              Color.black.cornerRadius(8).blendMode(.overlay)
-            }
-        }
-        else {
-          ProgressView(value: connectionStatusToProgress(status: model.status))
-            .frame(minHeight: 10)
-            .accentColor(colorScheme == .dark ? .white : .black)
-        }
-        
-        Spacer()
-        
-        HStack {
-          Button {
-            dismiss()
-            server = nil
-            model.disconnect()
-          } label: {
-            Text("Cancel")
+    VStack(alignment: .leading) {
+      if self.model.status == .disconnected {
+        TextField("Server Address", text: $address)
+          .keyboardType(.URL)
+          .disableAutocorrection(true)
+          .frame(height: 48)
+          .textFieldStyle(.plain)
+          .padding(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+          .background {
+            Color.black.cornerRadius(8).blendMode(.overlay)
           }
-          .bold()
-          .padding(EdgeInsets(top: 16, leading: 24, bottom: 16, trailing: 24))
-          .frame(maxWidth: .infinity)
-          .foregroundColor(colorScheme == .dark ? .white : .black)
-          .background(
-            colorScheme == .dark ?
-            LinearGradient(gradient: Gradient(colors: [Color(white: 0.4), Color(white: 0.3)]), startPoint: .top, endPoint: .bottom)
-            :
-              LinearGradient(gradient: Gradient(colors: [Color(white: 0.95), Color(white: 0.91)]), startPoint: .top, endPoint: .bottom)
-          )
-          .overlay(
-            RoundedRectangle(cornerRadius: 10.0).stroke(.black, lineWidth: 3).opacity(colorScheme == .dark ? 0.0 : 0.2)
-          )
-          .cornerRadius(10.0)
-          Button {
-            let s = Server(name: nil, description: nil, address: address, port: HotlinePorts.DefaultServerPort, users: 0, login: login, password: password)
-            server = s
-            self.model.login(server: s, username: "bolt", iconID: 128) { success in
-              if !success {
-                print("FAILED LOGIN??")
-              }
-              else {
-                self.model.sendUserInfo(username: "bolt", iconID: 128)
-                self.model.getUserList()
-              }
-            }
-          } label: {
-            Text("Connect")
+        TextField("Login", text: $login)
+          .disableAutocorrection(true)
+          .frame(height: 48)
+          .textFieldStyle(.plain)
+          .padding(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+          .background {
+            Color.black.cornerRadius(8).blendMode(.overlay)
           }
-          .disabled(self.model.status != .disconnected)
-          .bold()
-          .padding(EdgeInsets(top: 16, leading: 24, bottom: 16, trailing: 24))
-          .frame(maxWidth: .infinity)
-          .foregroundColor(colorScheme == .dark ? .white : .black)
-          .background(
-            colorScheme == .dark ?
-            LinearGradient(gradient: Gradient(colors: [Color(white: 0.4), Color(white: 0.3)]), startPoint: .top, endPoint: .bottom)
-            :
-              LinearGradient(gradient: Gradient(colors: [Color(white: 0.95), Color(white: 0.91)]), startPoint: .top, endPoint: .bottom)
-          )
-          .overlay(
-            RoundedRectangle(cornerRadius: 10.0).stroke(.black, lineWidth: 3).opacity(colorScheme == .dark ? 0.0 : 0.2)
-          )
-          .cornerRadius(10.0)
+        SecureField("Password", text: $password)
+          .disableAutocorrection(true)
+          .textFieldStyle(.plain)
+          .frame(height: 48)
+          .padding(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+          .background {
+            Color.black.cornerRadius(8).blendMode(.overlay)
+          }
+      }
+      else {
+        ProgressView(value: connectionStatusToProgress(status: model.status))
+          .frame(minHeight: 10)
+          .accentColor(colorScheme == .dark ? .white : .black)
+      }
+      
+      Spacer()
+      
+      HStack {
+        Button {
+          dismiss()
+          server = nil
+          model.disconnect()
+        } label: {
+          Text("Cancel")
         }
-        .padding()
+        .bold()
+        .padding(EdgeInsets(top: 16, leading: 24, bottom: 16, trailing: 24))
+        .frame(maxWidth: .infinity)
+        .foregroundColor(colorScheme == .dark ? .white : .black)
+        .background(
+          colorScheme == .dark ?
+          LinearGradient(gradient: Gradient(colors: [Color(white: 0.4), Color(white: 0.3)]), startPoint: .top, endPoint: .bottom)
+          :
+            LinearGradient(gradient: Gradient(colors: [Color(white: 0.95), Color(white: 0.91)]), startPoint: .top, endPoint: .bottom)
+        )
+        .overlay(
+          RoundedRectangle(cornerRadius: 10.0).stroke(.black, lineWidth: 3).opacity(colorScheme == .dark ? 0.0 : 0.2)
+        )
+        .cornerRadius(10.0)
+        Button {
+          let s = Server(name: nil, description: nil, address: address, port: HotlinePorts.DefaultServerPort, users: 0, login: login, password: password)
+          server = s
+          self.model.login(server: s, username: "bolt", iconID: 128) { success in
+            if !success {
+              print("FAILED LOGIN??")
+            }
+            else {
+              self.model.sendUserInfo(username: "bolt", iconID: 128)
+              self.model.getUserList()
+            }
+          }
+        } label: {
+          Text("Connect")
+        }
+        .disabled(self.model.status != .disconnected)
+        .bold()
+        .padding(EdgeInsets(top: 16, leading: 24, bottom: 16, trailing: 24))
+        .frame(maxWidth: .infinity)
+        .foregroundColor(colorScheme == .dark ? .white : .black)
+        .background(
+          colorScheme == .dark ?
+          LinearGradient(gradient: Gradient(colors: [Color(white: 0.4), Color(white: 0.3)]), startPoint: .top, endPoint: .bottom)
+          :
+            LinearGradient(gradient: Gradient(colors: [Color(white: 0.95), Color(white: 0.91)]), startPoint: .top, endPoint: .bottom)
+        )
+        .overlay(
+          RoundedRectangle(cornerRadius: 10.0).stroke(.black, lineWidth: 3).opacity(colorScheme == .dark ? 0.0 : 0.2)
+        )
+        .cornerRadius(10.0)
       }
       .padding()
-      .onChange(of: model.status) {
-        print("MODEL STATUS CHANGED")
-        if model.server != nil && server != nil && model.server! == server! {
-          if model.status == .loggedIn {
-            dismiss()
-          }
-//          else {
-//            connecting = (model.status != .disconnected)
-//          }
+    }
+    .padding()
+    .onChange(of: self.model.status) {
+      print("MODEL STATUS CHANGED")
+      if self.model.server != nil && self.server != nil && self.model.server! == server! {
+        if self.model.status == .loggedIn {
+          self.dismiss()
         }
+        //          else {
+        //            connecting = (model.status != .disconnected)
+        //          }
       }
-      .toolbar {
-        ToolbarItem(placement: .principal) {
-          Text("Connect to Server")
-            .font(.headline)
-        }
+    }
+    .toolbar {
+      ToolbarItem(placement: .principal) {
+        Text("Connect to Server")
+          .font(.headline)
       }
-//    .presentationBackground(.regularMaterial, in: Color(uiColor: .systemGroupedBackground))
+    }
+    //    .presentationBackground(.regularMaterial, in: Color(uiColor: .systemGroupedBackground))
     .presentationBackground {
       Color.clear
         .background(Material.regular)
@@ -190,12 +190,12 @@ struct TrackerView: View {
   }
   
   func updateServers() async {
-//    "hltracker.com"
-//    "tracker.preterhuman.net"
-//    "hotline.ubersoft.org"
-//    "tracked.nailbat.com"
-//    "hotline.duckdns.org"
-//    "tracked.agent79.org"
+    //    "hltracker.com"
+    //    "tracker.preterhuman.net"
+    //    "hotline.ubersoft.org"
+    //    "tracked.nailbat.com"
+    //    "hotline.duckdns.org"
+    //    "tracked.agent79.org"
     self.servers = await model.getServerList(tracker: "hltracker.com")
   }
   

@@ -147,7 +147,11 @@ public class HotlineFolderUploadClientNew: @MainActor HotlineTransferClient {
     progressHandler?(.connecting)
 
     // Connect to transfer server
-    let socket = try await self.connect(address: self.serverAddress, port: self.serverPort)
+    let socket = try await NetSocket.connect(
+      host: self.serverAddress,
+      port: self.serverPort + 1
+    )
+    
     self.socket = socket
     defer { Task { await socket.close() } }
 
@@ -279,18 +283,6 @@ public class HotlineFolderUploadClientNew: @MainActor HotlineTransferClient {
 
     // All items processed
     progressHandler?(.completed(url: nil))
-  }
-
-  private func connect(address: String, port: UInt16) async throws -> NetSocket {
-    guard let transferPort = NWEndpoint.Port(rawValue: port + 1) else {
-      throw NetSocketError.invalidPort
-    }
-
-    return try await NetSocket.connect(
-      host: .name(address, nil),
-      port: transferPort,
-      tls: .disabled
-    )
   }
 
   private func buildFolderHierarchy() throws {

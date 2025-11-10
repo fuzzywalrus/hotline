@@ -1,10 +1,3 @@
-//
-//  FilePreviewState.swift
-//  Hotline
-//
-//  Modern file preview state using HotlineFilePreviewClientNew
-//
-
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -24,7 +17,7 @@ final class FilePreviewState {
 
   let info: PreviewFileInfo
 
-  private var previewClient: HotlineFilePreviewClientNew?
+  private var previewClient: HotlineFilePreviewClient?
   private var previewTask: Task<Void, Never>?
 
   var state: LoadState = .unloaded
@@ -67,7 +60,7 @@ final class FilePreviewState {
 
     let task = Task { @MainActor in
       do {
-        let client = HotlineFilePreviewClientNew(
+        let client = HotlineFilePreviewClient(
           fileName: info.name,
           address: info.address,
           port: UInt16(info.port),

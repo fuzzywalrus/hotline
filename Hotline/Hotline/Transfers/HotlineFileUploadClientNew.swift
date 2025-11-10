@@ -2,16 +2,11 @@ import Foundation
 import Network
 
 @MainActor
-public class HotlineFileUploadClientNew: @MainActor HotlineTransferClient {
-  // MARK: - Configuration
-
+public class HotlineFileUploadClient: @MainActor HotlineTransferClient {
   public struct Configuration: Sendable {
     public var chunkSize: Int = 256 * 1024
-
     public init() {}
   }
-
-  // MARK: - Properties
 
   private let serverAddress: String
   private let serverPort: UInt16
@@ -26,8 +21,6 @@ public class HotlineFileUploadClientNew: @MainActor HotlineTransferClient {
 
   private var socket: NetSocket?
   private var uploadTask: Task<Void, Error>?
-
-  // MARK: - Initialization
 
   public init?(
     fileURL: URL,
@@ -54,8 +47,6 @@ public class HotlineFileUploadClientNew: @MainActor HotlineTransferClient {
     self.transferTotal = Int(payloadSize)
     self.transferSize = 0
     self.transferProgress = Progress(totalUnitCount: Int64(self.transferTotal))
-
-    print("HotlineFileUploadClientNew[\(reference)]: Preparing to upload '\(fileURL.lastPathComponent)' (\(payloadSize) bytes)")
   }
 
   // MARK: - Public API
@@ -74,7 +65,7 @@ public class HotlineFileUploadClientNew: @MainActor HotlineTransferClient {
       try await task.value
       self.uploadTask = nil
     } catch {
-      print("HotlineFileUploadClientNew[\(referenceNumber)]: Failed to upload file: \(error)")
+      print("HotlineFileUploadClient[\(self.referenceNumber)]: Failed to upload file: \(error)")
       self.uploadTask = nil
       progressHandler?(.error(error))
       throw error
@@ -83,17 +74,17 @@ public class HotlineFileUploadClientNew: @MainActor HotlineTransferClient {
 
   /// Cancel the current upload
   public func cancel() {
-    uploadTask?.cancel()
-    uploadTask = nil
+    self.uploadTask?.cancel()
+    self.uploadTask = nil
 
-    if let socket = socket {
+    if let socket = self.socket {
       Task {
         await socket.close()
       }
     }
   }
 
-  // MARK: - Private Implementation
+  // MARK: - Implementation
 
   private func updateProgress(sent: Int, speed: Double? = nil, estimate: TimeInterval? = nil) {
     self.transferSize = sent
@@ -120,34 +111,39 @@ public class HotlineFileUploadClientNew: @MainActor HotlineTransferClient {
     }
 
     // Connect to transfer server
-    let socket = try await connectToTransferServer()
-    self.socket = socket
+    let socket = try await NetSocket.connect(
+      host: self.serverAddress,
+      port: self.serverPort + 1
+    )
     defer { Task { await socket.close() } }
+    self.socket = socket
 
     // Get file metadata
-    guard let infoFork = HotlineFileInfoFork(file: fileURL) else {
+    guard let infoFork = HotlineFileInfoFork(file: self.fileURL) else {
       throw HotlineTransferClientError.failedToTransfer
     }
 
-    guard let header = HotlineFileHeader(file: fileURL) else {
+    guard let header = HotlineFileHeader(file: self.fileURL) else {
       throw HotlineTransferClientError.failedToTransfer
     }
 
-    guard let forkSizes = try? FileManager.default.getFileForkSizes(fileURL) else {
+    guard let forkSizes = try? FileManager.default.getFileForkSizes(self.fileURL) else {
       throw HotlineTransferClientError.failedToTransfer
     }
 
     let infoForkData = infoFork.data()
     let dataForkSize = forkSizes.dataForkSize
     let resourceForkSize = forkSizes.resourceForkSize
-
-    print("HotlineFileUploadClientNew[\(referenceNumber)]: File has dataFork=\(dataForkSize) bytes, resourceFork=\(resourceForkSize) bytes")
+    
+    // Configure progress for Finder if enabled
+    self.transferProgress.fileURL = self.fileURL.resolvingSymlinksInPath()
+    self.transferProgress.fileOperationKind = .uploading
+    self.transferProgress.publish()
     
     // Connected
     progressHandler?(.connected)
 
     // Send magic header
-    print("HotlineFileUploadClientNew[\(referenceNumber)]: Sending magic header")
     try await socket.write(Data(endian: .big) {
       "HTXF".fourCharCode()
       self.referenceNumber
@@ -157,41 +153,34 @@ public class HotlineFileUploadClientNew: @MainActor HotlineTransferClient {
 
     var totalBytesSent = 0
 
+    // MARK: - Info Fork
     // Send file header
-    print("HotlineFileUploadClientNew[\(referenceNumber)]: Sending file header")
     let headerData = header.data()
     try await socket.write(headerData)
     totalBytesSent += headerData.count
 
-    // Send INFO fork header
-    print("HotlineFileUploadClientNew[\(referenceNumber)]: Sending INFO fork header")
+    // Send info fork header
     let infoForkHeader = HotlineFileForkHeader(type: HotlineFileForkType.info.rawValue, dataSize: UInt32(infoForkData.count))
     try await socket.write(infoForkHeader.data())
     totalBytesSent += HotlineFileForkHeader.DataSize
 
-    // Send INFO fork data
-    print("HotlineFileUploadClientNew[\(referenceNumber)]: Sending INFO fork (\(infoForkData.count) bytes)")
+    // Send info fork
     try await socket.write(infoForkData)
     totalBytesSent += infoForkData.count
 
     self.updateProgress(sent: totalBytesSent)
     progressHandler?(.transfer(name: filename, size: self.transferSize, total: self.transferTotal, progress: self.transferProgress.fractionCompleted, speed: nil, estimate: nil))
 
-    // Configure progress for Finder if enabled
-    self.transferProgress.fileURL = fileURL.resolvingSymlinksInPath()
-    self.transferProgress.fileOperationKind = .uploading
-    self.transferProgress.publish()
-
-    // Send DATA fork if present
+    // MARK: - Data Fork
+    // Send data fork (if present)
     if dataForkSize > 0 {
-      print("HotlineFileUploadClientNew[\(referenceNumber)]: Sending DATA fork header")
+      // Data fork header
       let dataForkHeader = HotlineFileForkHeader(type: HotlineFileForkType.data.rawValue, dataSize: dataForkSize)
       try await socket.write(dataForkHeader.data())
       totalBytesSent += HotlineFileForkHeader.DataSize
 
-      // Stream DATA fork
-      print("HotlineFileUploadClientNew[\(referenceNumber)]: Streaming DATA fork (\(dataForkSize) bytes)")
-      let fileHandle = try FileHandle(forReadingFrom: fileURL)
+      // Stream data fork from disk
+      let fileHandle = try FileHandle(forReadingFrom: self.fileURL)
       defer { try? fileHandle.close() }
 
       let updates = await socket.writeFile(from: fileHandle, length: Int(dataForkSize))
@@ -204,17 +193,17 @@ public class HotlineFileUploadClientNew: @MainActor HotlineTransferClient {
       totalBytesSent += Int(dataForkSize)
     }
 
-    // Send RESOURCE fork if present
+    // MARK: - Resource Fork
+    // Send resource fork (if present)
     if resourceForkSize > 0 {
-      let resourceURL = fileURL.urlForResourceFork()
+      let resourceURL = self.fileURL.urlForResourceFork()
 
-      print("HotlineFileUploadClientNew[\(referenceNumber)]: Sending RESOURCE fork header")
+      // Resource fork header
       let resourceForkHeader = HotlineFileForkHeader(type: HotlineFileForkType.resource.rawValue, dataSize: resourceForkSize)
       try await socket.write(resourceForkHeader.data())
       totalBytesSent += HotlineFileForkHeader.DataSize
 
-      // Stream RESOURCE fork
-      print("HotlineFileUploadClientNew[\(referenceNumber)]: Streaming RESOURCE fork (\(resourceForkSize) bytes)")
+      // Stream resource fork from disk
       let resourceHandle = try FileHandle(forReadingFrom: resourceURL)
       defer { try? resourceHandle.close() }
 
@@ -231,25 +220,6 @@ public class HotlineFileUploadClientNew: @MainActor HotlineTransferClient {
     self.transferProgress.unpublish()
     progressHandler?(.completed(url: nil))
 
-    print("HotlineFileUploadClientNew[\(referenceNumber)]: Upload complete!")
-  }
-
-  // MARK: - Helper Methods
-
-  private func connectToTransferServer() async throws -> NetSocket {
-    guard let transferPort = NWEndpoint.Port(rawValue: serverPort + 1) else {
-      throw NetSocketError.invalidPort
-    }
-
-    print("HotlineFileUploadClientNew[\(referenceNumber)]: Connecting to \(serverAddress):\(serverPort + 1)")
-
-    let socket = try await NetSocket.connect(
-      host: .name(serverAddress, nil),
-      port: transferPort,
-      tls: .disabled
-    )
-
-    print("HotlineFileUploadClientNew[\(referenceNumber)]: Connected!")
-    return socket
+    print("HotlineFileUploadClient[\(self.referenceNumber)]: Complete!")
   }
 }

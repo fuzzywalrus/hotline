@@ -47,10 +47,8 @@ struct ListItemView: View {
       if let i = icon {
         Image(i)
           .resizable()
-        //            .renderingMode(.template)
           .scaledToFit()
           .frame(width: 20, height: 20)
-//          .padding(.leading, 2)
           .opacity(controlActiveState == .inactive ? 0.5 : 1.0)
       }
       
@@ -74,11 +72,13 @@ extension FocusedValues {
 }
 
 struct ServerView: View {
-  @Environment(\.dismiss) var dismiss
+  @Environment(\.dismiss) private var dismiss
   @Environment(\.colorScheme) private var colorScheme
   @Environment(\.controlActiveState) private var controlActiveState
   @Environment(\.scenePhase) private var scenePhase
   @Environment(\.modelContext) private var modelContext
+  
+  @Binding var server: Server
   
   @State private var model: HotlineState = HotlineState()
   @State private var state: ServerState = ServerState(selection: .chat)
@@ -86,17 +86,14 @@ struct ServerView: View {
   @State private var connectAddress: String = ""
   @State private var connectLogin: String = ""
   @State private var connectPassword: String = ""
-  @State private var connectNameSheetPresented: Bool = false
-  @State private var connectName: String = ""
-
-  @Binding var server: Server
+  @State private var connectionDisplayed: Bool = false
   
   static var menuItems: [ServerMenuItem] = [
     ServerMenuItem(type: .chat, name: "Chat", image: "Section Chat"),
     ServerMenuItem(type: .board, name: "Board", image: "Section Board"),
     ServerMenuItem(type: .news, name: "News", image: "Section News"),
     ServerMenuItem(type: .files, name: "Files", image: "Section Files"),
-    ServerMenuItem(type: .accounts, name: "Accounts", image: "Section Users"),
+    ServerMenuItem(type: .accounts, name: "Admin", image: "Section Users"),
   ]
   
   static var classicMenuItems: [ServerMenuItem] = [
@@ -105,50 +102,20 @@ struct ServerView: View {
     ServerMenuItem(type: .files, name: "Files", image: "Section Files"),
   ]
   
-  enum FocusFields {
-    case address
-    case login
-    case password
-  }
-  
-  @FocusState private var focusedField: FocusFields?
-  
   var body: some View {
     Group {
-      if model.status == .disconnected {
+      if self.model.status == .disconnected {
         VStack(alignment: .center) {
           Spacer()
-          self.connectForm
+//          if self.connectionDisplayed {
+            self.connectForm
+//          }
           Spacer()
         }
         .navigationTitle("Connect to Server")
-        .onAppear {
-          self.focusedField = .address
-        }
+//        .animation(.default.delay(0.25), value: self.connectionDisplayed)
       }
-      else if case .failed(let error) = model.status {
-        VStack {
-          Image("Hotline")
-            .resizable()
-            .renderingMode(.template)
-            .scaledToFit()
-            .foregroundColor(Color(hex: 0xE10000))
-            .frame(width: 18)
-            .opacity(controlActiveState == .inactive ? 0.5 : 1.0)
-            .padding(.trailing, 4)
-
-          Text("Connection Failed")
-            .font(.headline)
-          Text(error)
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: 300)
-        .padding()
-        .navigationTitle("Connection Failed")
-      }
-      else if model.status != .loggedIn {
+      else if self.model.status.isLoggingIn {
         HStack {
           Image("Hotline")
             .resizable()
@@ -156,38 +123,38 @@ struct ServerView: View {
             .scaledToFit()
             .foregroundColor(Color(hex: 0xE10000))
             .frame(width: 18)
-            .opacity(controlActiveState == .inactive ? 0.5 : 1.0)
+            .opacity(self.controlActiveState == .inactive ? 0.5 : 1.0)
             .padding(.trailing, 4)
 
-          ProgressView(value: connectionStatusToProgress(status: model.status)) {
-            Text(connectionStatusToLabel(status: model.status))
+          ProgressView(value: connectionStatusToProgress(status: self.model.status)) {
+            Text(connectionStatusToLabel(status: self.model.status))
           }
-          .accentColor(colorScheme == .dark ? .white : .black)
+          .accentColor(self.colorScheme == .dark ? .white : .black)
         }
         .frame(maxWidth: 300)
         .padding()
         .navigationTitle("Connecting to Server")
       }
-      else {
-        serverView
-          .environment(model)
+      else if self.model.status == .loggedIn {
+        self.serverView
+          .environment(self.model)
           .onChange(of: Prefs.shared.userIconID) {
-            Task { try? await model.sendUserPreferences() }
+            Task { try? await self.model.sendUserPreferences() }
           }
           .onChange(of: Prefs.shared.username) {
-            Task { try? await model.sendUserPreferences() }
+            Task { try? await self.model.sendUserPreferences() }
           }
           .onChange(of: Prefs.shared.refusePrivateMessages) {
-            Task { try? await model.sendUserPreferences() }
+            Task { try? await self.model.sendUserPreferences() }
           }
           .onChange(of: Prefs.shared.refusePrivateChat) {
-            Task { try? await model.sendUserPreferences() }
+            Task { try? await self.model.sendUserPreferences() }
           }
           .onChange(of: Prefs.shared.enableAutomaticMessage) {
-            Task { try? await model.sendUserPreferences() }
+            Task { try? await self.model.sendUserPreferences() }
           }
           .onChange(of: Prefs.shared.automaticMessage) {
-            Task { try? await model.sendUserPreferences() }
+            Task { try? await self.model.sendUserPreferences() }
           }
           .toolbar {
             if #available(macOS 26.0, *) {
@@ -196,7 +163,7 @@ struct ServerView: View {
                   .resizable()
                   .scaledToFit()
                   .frame(width: 28)
-                  .opacity(controlActiveState == .inactive ? 0.4 : 1.0)
+                  .opacity(self.controlActiveState == .inactive ? 0.4 : 1.0)
               }
               .sharedBackgroundVisibility(.hidden)
             }
@@ -206,7 +173,7 @@ struct ServerView: View {
                   .resizable()
                   .scaledToFit()
                   .frame(width: 28)
-                  .opacity(controlActiveState == .inactive ? 0.4 : 1.0)
+                  .opacity(self.controlActiveState == .inactive ? 0.4 : 1.0)
               }
             }
           }
@@ -214,164 +181,54 @@ struct ServerView: View {
     }
     .onDisappear {
       Task {
-        await model.disconnect()
+        await self.model.disconnect()
       }
     }
-    .onChange(of: model.serverTitle) {
-      state.serverName = model.serverTitle
+    .onChange(of: self.model.serverTitle) {
+      self.state.serverName = self.model.serverTitle
     }
-//    .onChange(of: model.bannerImage) {
-//      state.serverBanner = model.bannerImage
-//    }
-//    .onChange(of: model.bannerColors) {
-//      guard let backgroundColor = model.bannerColors?.backgroundColor else {
-//        state.bannerBackgroundColor = nil
-//        return
-//      }
-//      state.bannerBackgroundColor = Color(nsColor: backgroundColor)
-//    }
-    .alert(model.errorMessage ?? "Server Error", isPresented: $model.errorDisplayed) {
+    .alert(self.model.errorMessage ?? "Server Error", isPresented: self.$model.errorDisplayed) {
       Button("OK") {}
     }
-    .task {
-      var address = server.address
-      if server.port != HotlinePorts.DefaultServerPort {
-        address += ":\(server.port)"
+    .onAppear {
+      var address = self.server.address
+      if self.server.port != HotlinePorts.DefaultServerPort {
+        address += ":\(self.server.port)"
       }
-      connectAddress = server.address
-      connectLogin = server.login
-      connectPassword = server.password
+      self.connectAddress = self.server.address
+      self.connectLogin = self.server.login
+      self.connectPassword = self.server.password
       
       // Connect to server automatically unless the option key is held down.
       if !NSEvent.modifierFlags.contains(.option) {
-        connectToServer()
+        self.connectToServer()
       }
+      
+      self.connectionDisplayed = true
     }
     .focusedSceneValue(\.activeHotlineModel, model)
     .focusedSceneValue(\.activeServerState, state)
   }
   
-  var connectForm: some View {
-    VStack(alignment: .center, spacing: 0) {
-      Form {
-        HStack(alignment: .top, spacing: 10) {
-          Image("Server Large")
-            .resizable()
-            .scaledToFit()
-            .frame(width: 28, height: 28)
-          
-          VStack(alignment: .leading) {
-            Text("Connect to Server")
-            Text("Enter the address of a Hotline server to connect to.")
-              .foregroundStyle(.secondary)
-              .font(.subheadline)
-          }
-        }
-        
-        TextField(text: $connectAddress) {
-          Text("Address")
-        }
-        .focused($focusedField, equals: .address)
-        
-        TextField(text: $connectLogin, prompt: Text("Optional")) {
-          Text("Login")
-        }
-        .focused($focusedField, equals: .login)
-        
-        SecureField(text: $connectPassword, prompt: Text("Optional")) {
-          Text("Password")
-        }
-        .focused($focusedField, equals: .password)
-      }
-      .formStyle(.grouped)
-      .fixedSize(horizontal: false, vertical: true)
-      
-      HStack {
-        Button {
-          if !connectAddress.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            connectNameSheetPresented = true
-          }
-        } label: {
-          Image(systemName: "bookmark.fill")
-        }
-        .disabled(connectAddress.isEmpty)
-        .controlSize(.regular)
-        .buttonStyle(.automatic)
-        .help("Bookmark server")
-        
-        Spacer()
-        
-        Button("Cancel") {
-          dismiss()
-        }
-        .controlSize(.regular)
-        .buttonStyle(.automatic)
-        .keyboardShortcut(.cancelAction)
-        
-        Button("Connect") {
-          connectToServer()
-        }
-        .controlSize(.regular)
-        .buttonStyle(.automatic)
-        .keyboardShortcut(.defaultAction)
-      }
-      .padding(.horizontal, 20)
+  private var connectForm: some View {
+    ConnectView(address: self.$connectAddress, login: self.$connectLogin, password: self.$connectPassword) {
+      self.connectToServer()
     }
-    .onChange(of: connectAddress) {
-      let (a, p) = Server.parseServerAddressAndPort(connectAddress)
-      server.address = a
-      server.port = p
+    .focusSection()
+    .onChange(of: self.connectAddress) {
+      let (a, p) = Server.parseServerAddressAndPort(self.connectAddress)
+      self.server.address = a
+      self.server.port = p
     }
-    .onChange(of: connectLogin) {
-      server.login = connectLogin.trimmingCharacters(in: .whitespacesAndNewlines)
+    .onChange(of: self.connectLogin) {
+      self.server.login = self.connectLogin.trimmingCharacters(in: .whitespacesAndNewlines)
     }
-    .onChange(of: connectPassword) {
-      server.password = connectPassword
-    }
-    .frame(maxWidth: 380)
-    .padding()
-    .sheet(isPresented: $connectNameSheetPresented) {
-      VStack(alignment: .leading) {
-        Text("Save Bookmark")
-          .foregroundStyle(.secondary)
-          .padding(.bottom, 4)
-        TextField("Bookmark Name", text: $connectName)
-          .textFieldStyle(.roundedBorder)
-          .controlSize(.large)
-      }
-      .frame(width: 250)
-      .padding()
-      .toolbar {
-        ToolbarItem(placement: .cancellationAction) {
-          Button("Cancel") {
-            connectNameSheetPresented = false
-            connectName = ""
-          }
-        }
-        
-        ToolbarItem(placement: .confirmationAction) {
-          Button("Save") {
-            let name = String(connectName.trimmingCharacters(in: .whitespacesAndNewlines))
-            if !name.isEmpty {
-              connectNameSheetPresented = false
-              connectName = ""
-
-              let (host, port) = Server.parseServerAddressAndPort(connectAddress)
-              let login: String? = connectLogin.isEmpty ? nil : connectLogin
-              let password: String? = connectPassword.isEmpty ? nil : connectPassword
-              
-              if !host.isEmpty {
-                let newBookmark = Bookmark(type: .server, name: name, address: host, port: port, login: login, password: password)
-                Bookmark.add(newBookmark, context: modelContext)
-              }
-            }
-          }
-        }
-      }
+    .onChange(of: self.connectPassword) {
+      self.server.password = self.connectPassword
     }
   }
   
-  var navigationList: some View {
+  private var navigationList: some View {
     List(selection: $state.selection) {
       // Don't show news on older servers.
       ForEach(model.serverVersion < 151 ? ServerView.classicMenuItems : ServerView.menuItems) { menuItem in
@@ -496,7 +353,7 @@ struct ServerView: View {
         case .accounts:
             AccountManagerView()
               .navigationTitle(model.serverTitle)
-              .navigationSubtitle("Accounts")
+              .navigationSubtitle("Administration")
               .navigationSplitViewColumnWidth(min: 250, ideal: 500)
         case .user(let userID):
           let user = model.users.first(where: { $0.id == userID })
@@ -510,21 +367,21 @@ struct ServerView: View {
         }
     }
     .toolbar(removing: .sidebarToggle)
-
   }
-  
   
   // MARK: -
   
   @MainActor func connectToServer() {
-    guard !server.address.isEmpty else {
+    guard !self.server.address.isEmpty else {
       return
     }
+    
+    // Set status here so it's immediate (not waiting to enter task).
+    self.model.status = .connecting
 
     Task { @MainActor in
       do {
-        // login() handles everything: connect, getUserList, sendPreferences, downloadBanner
-        try await model.login(
+        try await self.model.login(
           server: server,
           username: Prefs.shared.username,
           iconID: Prefs.shared.userIconID

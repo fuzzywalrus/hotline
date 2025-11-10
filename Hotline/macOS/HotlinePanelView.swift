@@ -124,7 +124,7 @@ struct HotlinePanelView: View {
           .buttonStyle(.plain)
           .frame(width: 20, height: 20)
           .disabled(self.activeServerState == nil)
-          .help("Accounts")
+          .help("Administration")
         }
         
         Button {

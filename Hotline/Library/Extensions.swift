@@ -121,6 +121,10 @@ extension UTType {
 
 extension String {
   
+  var isBlank: Bool {
+    self.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+  }
+  
   func markdownToAttributedString() -> AttributedString {
     let markdownText = self.convertingLinksToMarkdown()
     let attr = (try? AttributedString(markdown: markdownText, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(self)

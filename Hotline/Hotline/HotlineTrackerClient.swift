@@ -74,8 +74,7 @@ class HotlineTrackerClient {
     // Connect to tracker (plaintext, no TLS)
     let socket = try await NetSocket.connect(
       host: address,
-      port: UInt16(port),
-      tls: .disabled
+      port: UInt16(port)
     )
     defer { Task { await socket.close() } }
 

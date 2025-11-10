@@ -16,17 +16,13 @@ public enum HotlineTransferProgress: Sendable {
   case completed(url: URL?) // Download or upload complete (local url valid for downloads)
 }
 
-/// Modern async/await file download client for Hotline protocol
-@MainActor
-public class HotlineFileDownloadClientNew: @MainActor HotlineTransferClient {
-  // MARK: - Configuration
 
+@MainActor
+public class HotlineFileDownloadClient: @MainActor HotlineTransferClient {
   public struct Configuration: Sendable {
     public var chunkSize: Int = 256 * 1024
     public init() {}
   }
-
-  // MARK: - Properties
 
   private let serverAddress: String
   private let serverPort: UInt16
@@ -40,8 +36,6 @@ public class HotlineFileDownloadClientNew: @MainActor HotlineTransferClient {
 
   private var socket: NetSocket?
   private var downloadTask: Task<URL, Error>?
-
-  // MARK: - Initialization
 
   public init(
     address: String,
@@ -91,7 +85,7 @@ public class HotlineFileDownloadClientNew: @MainActor HotlineTransferClient {
     self.downloadTask = nil
   }
 
-  // MARK: - Private Implementation
+  // MARK: - Implementation
   
   private func updateProgress(sent: Int) throws {
     self.transferSize = sent
@@ -141,9 +135,12 @@ public class HotlineFileDownloadClientNew: @MainActor HotlineTransferClient {
     try progressHandler?(.connecting)
     
     // Connect to transfer server
-    let socket = try await connectToTransferServer()
-    self.socket = socket
+    let socket = try await NetSocket.connect(
+      host: self.serverAddress,
+      port: self.serverPort + 1
+    )
     defer { Task { await socket.close() } }
+    self.socket = socket
     
     // See if we've been cancelled
     try self.checkCancelled()
@@ -257,35 +254,7 @@ public class HotlineFileDownloadClientNew: @MainActor HotlineTransferClient {
     }
   }
 
-  // MARK: - Helper Methods
-
-  private func connectToTransferServer() async throws -> NetSocket {
-    guard let transferPort = NWEndpoint.Port(rawValue: serverPort + 1) else {
-      throw NetSocketError.invalidPort
-    }
-
-    print("HotlineFileDownloadClientNew[\(referenceNumber)]: Connecting to \(serverAddress):\(serverPort + 1)")
-
-    let socket = try await NetSocket.connect(
-      host: .name(serverAddress, nil),
-      port: transferPort,
-      tls: .disabled
-    )
-
-    print("HotlineFileDownloadClientNew[\(referenceNumber)]: Connected!")
-    return socket
-  }
-
-  private func sendMagicHeader(socket: NetSocket) async throws {
-    let header = Data(endian: .big) {
-      "HTXF".fourCharCode()
-      referenceNumber
-      UInt32.zero
-      UInt32.zero
-    }
-
-    try await socket.write(header)
-  }
+  // MARK: - Utility
 
   private func writeResourceFork(data: Data, to url: URL) throws {
     var resolvedURL = url
@@ -294,7 +263,7 @@ public class HotlineFileDownloadClientNew: @MainActor HotlineTransferClient {
     let resourceURL = resolvedURL.urlForResourceFork()
     try data.write(to: resourceURL)
 
-    print("HotlineFileDownloadClientNew[\(referenceNumber)]: Wrote resource fork (\(data.count) bytes)")
+    print("HotlineFileDownloadClient[\(self.referenceNumber)]: Wrote resource fork (\(data.count) bytes)")
   }
 }
 
