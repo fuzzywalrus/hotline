@@ -109,7 +109,7 @@ struct Application: App {
     .onChange(of: AppLaunchState.shared.launchState) {
       if AppLaunchState.shared.launchState == .launched {
         if Prefs.shared.showBannerToolbar {
-          showBannerWindow()
+          self.showBannerWindow()
         }
       }
     }
@@ -196,13 +196,13 @@ struct Application: App {
     .commands {
       CommandGroup(replacing: .newItem) {
         Button("Connect to Server...") {
-          openWindow(id: "server")
+          self.openWindow(id: "server")
         }
         .keyboardShortcut(.init("K"), modifiers: .command)
       }
       CommandGroup(before: .singleWindowList) {
         Button("Toolbar") {
-          toggleBannerWindow()
+          self.toggleBannerWindow()
         }
         .keyboardShortcut(.init("\\"), modifiers: [.shift, .command])
       }
@@ -210,18 +210,18 @@ struct Application: App {
         Divider()
         Button("Request Feature...") {
           if let url = URL(string: "https://github.com/mierau/hotline/issues/new?labels=enhancement") {
-            openURL(url)
+            self.openURL(url)
           }
         }
         Button("Report Bug...") {
           if let url = URL(string: "https://github.com/mierau/hotline/issues/new?labels=bug") {
-            openURL(url)
+            self.openURL(url)
           }
         }
         Divider()
         Button("Open Latest Release Page...") {
           if let url = URL(string: "https://github.com/mierau/hotline/releases/latest") {
-            openURL(url)
+            self.openURL(url)
           }
         }
       }
@@ -230,7 +230,7 @@ struct Application: App {
           guard let selection else {
             return
           }
-          connect(to: selection)
+          self.connect(to: selection)
         }
         .disabled(selection == nil || selection?.server == nil)
         .keyboardShortcut(.downArrow, modifiers: .command)
@@ -242,38 +242,47 @@ struct Application: App {
           }
         }
         .disabled(activeHotline?.status == .disconnected)
+        
         Divider()
+        
         Button("Broadcast Message...") {
           // TODO: Implement broadcast message when user is allowed.
         }
         .disabled(true)
         .keyboardShortcut(.init("B"), modifiers: .command)
+        
         Divider()
-        Button("Show Chat") {
+        
+        Button("Chat") {
           activeServerState?.selection = .chat
         }
         .disabled(activeHotline?.status != .loggedIn)
         .keyboardShortcut(.init("1"), modifiers: .command)
-        Button("Show Message Board") {
+        Button("Board") {
           activeServerState?.selection = .board
         }
         .disabled(activeHotline?.status != .loggedIn)
         .keyboardShortcut(.init("2"), modifiers: .command)
-        Button("Show News") {
+        Button("News") {
           activeServerState?.selection = .news
         }
         .disabled(activeHotline?.status != .loggedIn || (activeHotline?.serverVersion ?? 0) < 151)
         .keyboardShortcut(.init("3"), modifiers: .command)
-        Button("Show Files") {
+        Button("Files") {
           activeServerState?.selection = .files
         }
         .disabled(activeHotline?.status != .loggedIn)
         .keyboardShortcut(.init("4"), modifiers: .command)
-        Button("Show Accounts") {
-          activeServerState?.selection = .accounts
+        
+        if activeHotline?.access?.contains(.canOpenUsers) == true {
+          Divider()
+          
+          Button("Accounts") {
+            activeServerState?.selection = .accounts
+          }
+          .disabled(activeHotline?.status != .loggedIn || activeHotline?.access?.contains(.canOpenUsers) != true  )
+          .keyboardShortcut(.init("5"), modifiers: .command)
         }
-        .disabled(activeHotline?.status != .loggedIn || activeHotline?.access?.contains(.canOpenUsers) != true  )
-        .keyboardShortcut(.init("5"), modifiers: .command)
       }
     }
     
@@ -287,8 +296,8 @@ struct Application: App {
       TransfersView()
         .frame(minWidth: 500, minHeight: 200)
     }
-    .defaultSize(width: 600, height: 400)
-    .defaultPosition(.center)
+    .defaultSize(width: 500, height: 400)
+    .defaultPosition(.topTrailing)
     .keyboardShortcut(.init("T"), modifiers: [.shift, .command])
         
     // MARK: Image Preview Window
@@ -328,7 +337,7 @@ struct Application: App {
 
   func connect(to item: TrackerSelection) {
     if let server = item.server {
-      openWindow(id: "server", value: server)
+      self.openWindow(id: "server", value: server)
     }
   }
 

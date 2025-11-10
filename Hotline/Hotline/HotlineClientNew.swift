@@ -64,7 +64,7 @@ public enum HotlineClientError: Error {
 // MARK: - Login Info
 
 /// Information needed to log in to a Hotline server
-public struct HotlineLoginInfo: Sendable {
+public struct HotlineLogin: Sendable {
   let login: String
   let password: String
   let username: String
@@ -100,7 +100,7 @@ public struct HotlineServerInfo: Sendable {
 /// let client = try await HotlineClientNew.connect(
 ///   host: "server.example.com",
 ///   port: 5500,
-///   login: HotlineLoginInfo(login: "guest", password: "", username: "John", iconID: 414)
+///   login: HotlineLogin(login: "guest", password: "", username: "John", iconID: 414)
 /// )
 ///
 /// // Listen for events
@@ -188,14 +188,13 @@ public actor HotlineClientNew {
   public static func connect(
     host: String,
     port: UInt16 = 5500,
-    login: HotlineLoginInfo,
-    tls: TLSPolicy = .disabled
+    login: HotlineLogin
   ) async throws -> HotlineClientNew {
     print("HotlineClientNew.connect(): Starting connection to \(host):\(port) as '\(login.username)'")
 
     // Connect socket
     print("HotlineClientNew.connect(): Connecting socket...")
-    let socket = try await NetSocket.connect(host: host, port: port, tls: tls)
+    let socket = try await NetSocket.connect(host: host, port: port)
     print("HotlineClientNew.connect(): Socket connected")
 
     // Perform handshake
@@ -264,7 +263,7 @@ public actor HotlineClientNew {
 
   // MARK: - Login
 
-  private func performLogin(_ login: HotlineLoginInfo) async throws -> HotlineServerInfo {
+  private func performLogin(_ login: HotlineLogin) async throws -> HotlineServerInfo {
     var transaction = HotlineTransaction(id: self.generateTransactionID(), type: .login)
     transaction.setFieldEncodedString(type: .userLogin, val: login.login)
     transaction.setFieldEncodedString(type: .userPassword, val: login.password)
@@ -273,7 +272,7 @@ public actor HotlineClientNew {
     transaction.setFieldUInt32(type: .versionNumber, val: 123)
 
     let reply = try await sendTransaction(transaction)
-
+    
     guard reply.errorCode == 0 else {
       let errorText = reply.getField(type: .errorText)?.getString()
       throw HotlineClientError.loginFailed(errorText)

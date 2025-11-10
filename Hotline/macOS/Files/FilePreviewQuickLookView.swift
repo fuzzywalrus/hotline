@@ -1,10 +1,3 @@
-//
-//  FilePreviewQuickLookView.swift
-//  Hotline
-//
-//  QuickLook-based file preview window for all supported file types
-//
-
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -15,10 +8,11 @@ struct FilePreviewQuickLookView: View {
 
   @Environment(\.controlActiveState) private var controlActiveState
   @Environment(\.colorScheme) private var colorScheme
-  @Environment(\.dismiss) var dismiss
+  @Environment(\.dismiss) private var dismiss
 
   @Binding var info: PreviewFileInfo?
   @State var preview: FilePreviewState? = nil
+  
   @FocusState private var focusField: FilePreviewFocus?
 
   var body: some View {
@@ -76,14 +70,14 @@ struct FilePreviewQuickLookView: View {
     .background(Color(nsColor: .textBackgroundColor))
     .focused($focusField, equals: .window)
     .navigationTitle(info?.name ?? "File Preview")
-    .background(
+    .background {
+      if let fileURL = self.preview?.fileURL {
         WindowConfigurator { window in
-          if let fileURL = preview?.fileURL {
-            window.representedURL = fileURL
-            window.standardWindowButton(.documentIconButton)?.isHidden = false
-          }
+          window.representedURL = fileURL
+          window.standardWindowButton(.documentIconButton)?.isHidden = false
         }
-      )
+      }
+    }
     .toolbar {
       if let _ = preview?.fileURL {
         if let info = info {

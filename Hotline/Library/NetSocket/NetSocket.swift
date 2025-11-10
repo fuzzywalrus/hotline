@@ -87,7 +87,7 @@ public enum NetSocketError: Error, CustomStringConvertible, Sendable {
   }
 }
 
-/// An async/await TCP socket with automatic buffering and framing support
+/// An async TCP socket with automatic buffering
 ///
 /// NetSocket provides:
 /// - Async connection management
@@ -99,7 +99,7 @@ public enum NetSocketError: Error, CustomStringConvertible, Sendable {
 /// ```swift
 /// let socket = try await NetSocket.connect(host: "example.com", port: 80)
 /// try await socket.write("Hello\n".data(using: .utf8)!)
-/// let response = try await socket.readUntil(delimiter: .lineFeed)
+/// let response = try await socket.read(until: .lineFeed)
 /// ```
 public actor NetSocket {
   /// Configuration options for the socket
@@ -150,18 +150,11 @@ public actor NetSocket {
   /// - Parameters:
   ///   - host: Network framework host (e.g., `.name("example.com", nil)` or `.ipv4(...)`)
   ///   - port: Network framework port
-  ///   - tls: TLS policy (default: enabled with default settings)
   ///   - config: Socket configuration (default: standard settings)
+  ///   - parameters: NWParameters (default: .tcp)
   /// - Returns: A connected and ready `NetSocket`
   /// - Throws: Network errors or connection failures
-  public static func connect(host: NWEndpoint.Host, port: NWEndpoint.Port, tls: TLSPolicy = .enabled(), config: Config = .init()) async throws -> NetSocket {
-    let parameters = NWParameters.tcp
-    if tls.enabled {
-      let tlsOptions = NWProtocolTLS.Options()
-      tls.configure?(tlsOptions)
-      parameters.defaultProtocolStack.applicationProtocols.insert(tlsOptions, at: 0)
-    }
-
+  public static func connect(host: NWEndpoint.Host, port: NWEndpoint.Port, config: Config = .init(), parameters: NWParameters = .tcp) async throws -> NetSocket {
     let conn = NWConnection(host: host, port: port, using: parameters)
     let socket = NetSocket(connection: conn, config: config)
     try await socket.start()
@@ -169,28 +162,12 @@ public actor NetSocket {
   }
 
   /// Convenience wrapper to connect using string hostname and integer port
-  public static func connect(host: String, port: UInt16, tls: TLSPolicy = .enabled(), config: Config = .init()) async throws -> NetSocket {
+  public static func connect(host: String, port: UInt16, config: Config = .init()) async throws -> NetSocket {
     guard let nwPort = NWEndpoint.Port(rawValue: port) else {
       throw NetSocketError.invalidPort
     }
 
-    // Parse the host string to create the appropriate NWEndpoint.Host
-    let nwHost: NWEndpoint.Host
-
-    // Try parsing as IPv6 without zone
-    if let ipv6Addr = IPv6Address(host) {
-      nwHost = .ipv6(ipv6Addr)
-    }
-    // Try parsing as IPv4
-    else if let ipv4Addr = IPv4Address(host) {
-      nwHost = .ipv4(ipv4Addr)
-    }
-    // Fall back to treating as hostname
-    else {
-      nwHost = .name(host, nil)
-    }
-
-    return try await self.connect(host: nwHost, port: nwPort, tls: tls, config: config)
+    return try await self.connect(host: NWEndpoint.Host(host), port: nwPort, config: config)
   }
   
   // MARK: Close

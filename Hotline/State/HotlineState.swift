@@ -8,6 +8,10 @@ enum HotlineConnectionStatus: Equatable {
   case connected
   case loggedIn
   case failed(String)
+  
+  var isLoggingIn: Bool {
+    self == .connecting || self == .connected
+  }
 
   var isConnected: Bool {
     return self == .connected || self == .loggedIn
@@ -254,7 +258,7 @@ class HotlineState: Equatable {
   @ObservationIgnored private var restoredChatSessionKey: ChatStore.SessionKey?
   @ObservationIgnored private var chatHistoryObserver: NSObjectProtocol?
   @ObservationIgnored private var lastPersistedMessageType: ChatMessageType?
-
+  
   // MARK: - Initialization
 
   init() {
@@ -262,8 +266,10 @@ class HotlineState: Equatable {
       forName: ChatStore.historyClearedNotification,
       object: nil,
       queue: .main
-    ) { @MainActor [weak self] _ in
-      self?.handleChatHistoryCleared()
+    ) { _ in
+      Task { @MainActor [weak self] in
+        self?.handleChatHistoryCleared()
+      }
     }
   }
 
@@ -295,7 +301,7 @@ class HotlineState: Equatable {
 
     do {
       // Connect and login
-      let loginInfo = HotlineLoginInfo(
+      let loginInfo = HotlineLogin(
         login: server.login,
         password: server.password,
         username: username,
@@ -360,7 +366,7 @@ class HotlineState: Equatable {
         await client.disconnect()
         self.client = nil
       }
-      self.status = .failed(error.localizedDescription)
+      self.status = .disconnected // .failed(error.localizedDescription)
       self.errorDisplayed = true
       self.errorMessage = error.localizedDescription
       throw error
@@ -498,7 +504,7 @@ class HotlineState: Equatable {
       do {
         print("HotlineState: Banner download info - reference: \(result.referenceNumber), transferSize: \(result.transferSize)")
 
-        let previewClient = HotlineFilePreviewClientNew(
+        let previewClient = HotlineFilePreviewClient(
           fileName: "banner",
           address: address,
           port: UInt16(port),
@@ -894,7 +900,7 @@ class HotlineState: Equatable {
       AppState.shared.addTransfer(transfer)
 
       // Create download client
-      let downloadClient = HotlineFileDownloadClientNew(
+      let downloadClient = HotlineFileDownloadClient(
         address: address,
         port: UInt16(port),
         reference: referenceNumber,
@@ -1270,7 +1276,7 @@ class HotlineState: Equatable {
       print("HotlineState: Got upload reference: \(referenceNumber)")
 
       // Create upload client
-      guard let uploadClient = HotlineFileUploadClientNew(
+      guard let uploadClient = HotlineFileUploadClient(
         fileURL: fileURL,
         address: address,
         port: UInt16(port),
