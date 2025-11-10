@@ -16,15 +16,24 @@ struct TransfersView: View {
     .frame(minWidth: 500, minHeight: 200)
     .navigationTitle("Transfers")
     .toolbar {
-//      ToolbarItem(placement: .primaryAction) {
-//        Button {
-//          self.appState.sweepTransfers()
-//          self.selectedTransfers = []
-//        } label: {
-//          Label("Remove Completed", systemImage: "checklist")
-//        }
-//        .disabled(self.appState.transfers.isEmpty)
-//      }
+      ToolbarItem(placement: .primaryAction) {
+        Button {
+          if self.selectedTransfers.isEmpty {
+            if let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first {
+              NSWorkspace.shared.open(downloadsURL)
+            }
+          }
+          else {
+            let fileURLs = self.selectedTransfers.compactMap(\.fileURL)
+            if !fileURLs.isEmpty {
+              NSWorkspace.shared.activateFileViewerSelecting(fileURLs)
+            }
+          }
+        } label: {
+          Label("Show Downloads", systemImage: "folder")
+        }
+        .help("Show Downloads")
+      }
       
       ToolbarItem(placement: .primaryAction) {
         Button {
@@ -33,15 +42,16 @@ struct TransfersView: View {
           }
           self.selectedTransfers = []
         } label: {
-          Label("Cancel Transfer", systemImage: "xmark")
+          Label(self.selectedTransfers.count == 1 ? "Remove Transfer" : "Remove Transfers", systemImage: "xmark")
         }
         .disabled(self.selectedTransfers.isEmpty)
+        .help(self.selectedTransfers.count == 1 ? "Remove Transfer" : "Remove Transfers")
       }
     }
   }
-
+  
   // MARK: - Empty State
-
+  
   private var emptyState: some View {
     ContentUnavailableView {
       Label("No Transfers", systemImage: "arrow.up.arrow.down")
@@ -49,9 +59,9 @@ struct TransfersView: View {
       Text("Your Hotline file transfers will appear here")
     }
   }
-
+  
   // MARK: - Transfers List
-
+  
   private var transfersList: some View {
     List(selection: self.$selectedTransfers) {
       ForEach(self.appState.transfers) { transfer in
@@ -62,39 +72,183 @@ struct TransfersView: View {
     .listStyle(.inset)
     .environment(\.defaultMinListRowHeight, 56)
     .contextMenu(forSelectionType: TransferInfo.self) { items in
-      if let item = items.first {
-        if item.completed,
-           let fileURL = item.fileURL {
-          Button("Remove Transfer") {
-            self.appState.cancelTransfer(id: item.id)
-          }
-          
-          Divider()
-          
-          Button("Show in Finder") {
-            NSWorkspace.shared.activateFileViewerSelecting([fileURL])
-          }
-
-          Button("Open") {
+      if items.allSatisfy(\.completed) {
+        let fileURLs: [URL] = items.compactMap(\.fileURL)
+        
+        Button("Remove Transfer\(items.count > 1 ? "s" : "")", systemImage: "xmark") {
+          self.appState.cancelTransfers(ids: items.map(\.id))
+          self.selectedTransfers = []
+        }
+        
+        Divider()
+        
+        Button("Open", systemImage: "arrow.up.right.square") {
+          for fileURL in fileURLs {
             NSWorkspace.shared.open(fileURL)
           }
-
-          Divider()
-
-          Button("Move to Trash") {
-            NSWorkspace.shared.recycle([fileURL])
-          }
         }
-        else if !item.done {
-          Button("Cancel Transfer") {
-            self.appState.cancelTransfer(id: item.id)
+        
+        self.openWithMenu(for: fileURLs)
+        
+        Button("Show in Finder", systemImage: "finder") {
+          NSWorkspace.shared.activateFileViewerSelecting(fileURLs)
+        }
+        
+        Divider()
+        
+        Button("Move to Trash", systemImage: "trash") {
+          self.appState.cancelTransfers(ids: items.map(\.id))
+          NSWorkspace.shared.recycle(fileURLs)
+          self.selectedTransfers = []
+        }
+      }
+      else {
+        Button("Remove Transfer\(items.count > 1 ? "s" : "")", systemImage: "xmark") {
+          self.appState.cancelTransfers(ids: items.map(\.id))
+          self.selectedTransfers = []
+        }
+        
+        Divider()
+        
+        Button("Move to Trash", systemImage: "trash") {
+          self.appState.cancelTransfers(ids: items.map(\.id))
+          
+          let fileURLs: [URL] = items.compactMap(\.fileURL)
+          if !fileURLs.isEmpty {
+            NSWorkspace.shared.recycle(fileURLs)
           }
+          
+          self.selectedTransfers = []
         }
       }
     } primaryAction: { items in
-      let fileURLs: [URL] = items.compactMap { $0.fileURL }
-      if !fileURLs.isEmpty {
-        NSWorkspace.shared.activateFileViewerSelecting(fileURLs)
+      if let fileURL = items.first?.fileURL {
+        NSWorkspace.shared.open(fileURL)
+      }
+    }
+  }
+  
+  private func getOpenWithApps(for fileURLs: [URL], defaultAppURL: URL? = nil) -> [(name: String, url: URL)] {
+    // If no files provided, there is no common app to open them
+    guard !fileURLs.isEmpty else { return [] }
+    
+    // Build a list of app URL sets for each file URL
+    let appSets: [Set<URL>] = fileURLs.map { url in
+      let apps = NSWorkspace.shared.urlsForApplications(toOpen: url)
+      return Set(apps)
+    }
+    
+    // Compute the intersection across all file URL app sets
+    guard var intersection = appSets.first else { return [] }
+    for set in appSets.dropFirst() {
+      intersection.formIntersection(set)
+    }
+    
+    // Optionally remove the default app from the list
+    if let defaultAppURL {
+      intersection.remove(defaultAppURL)
+    }
+    
+    // Map to display names and sort by name
+    let result: [(name: String, url: URL)] = intersection.compactMap { url in
+      let appName = FileManager.default
+        .displayName(atPath: url.path)
+        .replacingOccurrences(of: ".app", with: "")
+      return (name: appName, url: url)
+    }.sorted { $0.name < $1.name }
+    
+    return result
+  }
+  
+  private func getDefaultApp(for fileURLs: [URL]) -> (name: String, url: URL)? {
+    // No files -> no default app
+    guard !fileURLs.isEmpty else { return nil }
+    
+    // Single file: use the system default directly
+    if fileURLs.count == 1, let url = NSWorkspace.shared.urlForApplication(toOpen: fileURLs[0]) {
+      let name = FileManager.default
+        .displayName(atPath: url.path)
+        .replacingOccurrences(of: ".app", with: "")
+      return (name, url)
+    }
+    
+    // Build the intersection of apps that can open ALL files
+    let appSets: [Set<URL>] = fileURLs.map { url in
+      Set(NSWorkspace.shared.urlsForApplications(toOpen: url))
+    }
+    guard var intersection = appSets.first else { return nil }
+    for set in appSets.dropFirst() {
+      intersection.formIntersection(set)
+      if intersection.isEmpty { return nil }
+    }
+    
+    // Tally the system default app for each file
+    var defaultCounts: [URL: Int] = [:]
+    for fileURL in fileURLs {
+      if let def = NSWorkspace.shared.urlForApplication(toOpen: fileURL) {
+        defaultCounts[def, default: 0] += 1
+      }
+    }
+    
+    // Prefer the app that's the default for the majority of files, provided it can open all
+    if let bestByMajority = intersection.max(by: { (a, b) -> Bool in
+      let ca = defaultCounts[a, default: 0]
+      let cb = defaultCounts[b, default: 0]
+      if ca == cb {
+        // Tie-breaker deferred to later
+        return false
+      }
+      return ca < cb
+    }),
+       defaultCounts[bestByMajority, default: 0] > 0 {
+      let name = FileManager.default
+        .displayName(atPath: bestByMajority.path)
+        .replacingOccurrences(of: ".app", with: "")
+      return (name, bestByMajority)
+    }
+    
+    return nil
+  }
+  
+  private func openWithMenu(for fileURLs: [URL]) -> some View {
+    Menu("Open With") {
+      let defaultApp: (name: String, url: URL)? = self.getDefaultApp(for: fileURLs)
+      let apps: [(name: String, url: URL)] = self.getOpenWithApps(for: fileURLs, defaultAppURL: defaultApp?.url)
+      
+      if let defaultApp {
+        Button {
+          NSWorkspace.shared.open(fileURLs, withApplicationAt: defaultApp.url, configuration: NSWorkspace.OpenConfiguration())
+        } label: {
+          Label {
+            Text(defaultApp.name)
+          } icon: {
+            Image(nsImage: NSWorkspace.shared.icon(forFile: defaultApp.url.path))
+              .resizable()
+              .scaledToFit()
+              .frame(width: 16, height: 16)
+          }
+        }
+        
+        if !apps.isEmpty {
+          Divider()
+        }
+      }
+      
+      if !apps.isEmpty {
+        ForEach(apps, id: \.url) { app in
+          Button {
+            NSWorkspace.shared.open(fileURLs, withApplicationAt: app.url, configuration: NSWorkspace.OpenConfiguration())
+          } label: {
+            Label {
+              Text(app.name)
+            } icon: {
+              Image(nsImage: NSWorkspace.shared.icon(forFile: app.url.path))
+                .resizable()
+                .scaledToFit()
+                .frame(width: 16, height: 16)
+            }
+          }
+        }
       }
     }
   }
@@ -110,20 +264,24 @@ struct TransferRow: View {
   private var statsView: some View {
     HStack(spacing: 8) {
       // Progress percentage
-//      Text("\(Int(self.transfer.progress * 100))%")
+      //      Text("\(Int(self.transfer.progress * 100))%")
       
       // Speed
       if let speed = self.transfer.speed {
-        Text(self.formatSpeed(speed))
+        // TODO: Use arrow.up for uploads.
+        Label(self.formatSpeed(speed), systemImage: "arrow.down")
+//        Text(self.formatSpeed(speed))
       }
-
+      
       // Time remaining
       if let timeRemaining = self.transfer.timeRemaining {
-        Text(self.formatTimeRemaining(timeRemaining))
+        Label(self.formatTimeRemaining(timeRemaining), systemImage: "clock")
+//        Text(self.formatTimeRemaining(timeRemaining))
       }
       
       // File size
-      Text(self.formatSize(self.transfer.size))
+      Label(self.formatSize(self.transfer.size), systemImage: "document")
+//      Text(self.formatSize(self.transfer.size))
     }
     .font(.subheadline)
     .foregroundStyle(.secondary)
@@ -151,13 +309,13 @@ struct TransferRow: View {
         }
       }
   }
-
+  
   var body: some View {
     HStack(alignment: .center, spacing: 8) {
       self.fileIconView
       
-      VStack(alignment: .leading, spacing: 4) {
-        HStack(alignment: .firstTextBaseline, spacing: 4) {
+      VStack(alignment: .leading, spacing: 2) {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
           Text(self.transfer.title)
             .font(.headline)
             .lineLimit(1)
@@ -182,7 +340,7 @@ struct TransferRow: View {
             .foregroundStyle(.secondary)
         }
         else if self.transfer.completed {
-          Text("Complete")
+          Text("Downloaded")
             .font(.subheadline)
             .foregroundStyle(.fileComplete)
         }
@@ -192,65 +350,25 @@ struct TransferRow: View {
             .controlSize(.large)
         }
       }
-      
-      if self.transfer.completed {
-        Button {
-          guard let fileURL = self.transfer.fileURL else {
-            return
-          }
-          
-          NSWorkspace.shared.activateFileViewerSelecting([fileURL])
-        } label: {
-          Image(systemName: "eye.circle.fill")
-            .resizable()
-            .scaledToFit()
-            .frame(width: 24, height: 24)
-            .foregroundStyle(.secondary)
-        }
-        .buttonBorderShape(.circle)
-        .buttonStyle(.plain)
-      }
     }
-        
-//        VStack(alignment: .leading, spacing: 2) {
-          
-
-//          if let serverName = self.transfer.serverName {
-//            Text(serverName)
-//              .font(.caption)
-//              .foregroundStyle(.secondary)
-//          }
-//        }
-
-//        // Cancel button
-//        Button {
-//          self.appState.cancelTransfer(id: transfer.id)
-//        } label: {
-//          Image(systemName: "xmark.circle.fill")
-//            .foregroundStyle(.secondary)
-//        }
-//        .buttonStyle(.plain)
-//        .help("Cancel download")
-//      }
-//    }
   }
-
+  
   // MARK: - Formatting
-
+  
   private func formatSize(_ bytes: UInt) -> String {
     let formatter = ByteCountFormatter()
     formatter.countStyle = .file
     formatter.allowedUnits = [.useKB, .useMB, .useGB]
     return formatter.string(fromByteCount: Int64(bytes))
   }
-
+  
   private func formatSpeed(_ bytesPerSecond: Double) -> String {
     let formatter = ByteCountFormatter()
     formatter.countStyle = .file
     formatter.allowedUnits = [.useKB, .useMB, .useGB]
     return "\(formatter.string(fromByteCount: Int64(bytesPerSecond)))/s"
   }
-
+  
   private func formatTimeRemaining(_ seconds: TimeInterval) -> String {
     if seconds < 60 {
       return "\(Int(seconds))s"
@@ -272,3 +390,4 @@ struct TransferRow: View {
   TransfersView()
     .environment(AppState.shared)
 }
+
