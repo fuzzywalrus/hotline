@@ -29,7 +29,7 @@ enum ServerNavigationType: Identifiable, Hashable, Equatable {
     case .files:
       return "Files"
     case .accounts:
-      return "Admin"
+      return "Accounts"
     case .user(let userID):
       return String(userID)
     }

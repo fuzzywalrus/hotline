@@ -9,7 +9,7 @@ public struct HotlineFolderItemProgress: Sendable {
 }
 
 @MainActor
-public class HotlineFolderDownloadClientNew: @MainActor HotlineTransferClient {
+public class HotlineFolderDownloadClient: @MainActor HotlineTransferClient {
   private let serverAddress: String
   private let serverPort: UInt16
   private let referenceNumber: UInt32
@@ -21,8 +21,6 @@ public class HotlineFolderDownloadClientNew: @MainActor HotlineTransferClient {
   private var socket: NetSocket?
   private var downloadTask: Task<URL, Error>?
   private var folderProgress: Progress?
-
-  // MARK: - Initialization
 
   public init(
     address: String,
@@ -36,11 +34,9 @@ public class HotlineFolderDownloadClientNew: @MainActor HotlineTransferClient {
     self.referenceNumber = reference
     self.transferTotal = Int(size)
     self.folderItemCount = itemCount
-
-    print("HotlineFolderDownloadClientNew[\(reference)]: Server reported transferSize=\(size) bytes, folderItemCount=\(itemCount) items")
   }
 
-  // MARK: - Public API
+  // MARK: - API
 
   public func download(
     to location: HotlineDownloadLocation,
@@ -63,7 +59,7 @@ public class HotlineFolderDownloadClientNew: @MainActor HotlineTransferClient {
       self.downloadTask = nil
       return url
     } catch {
-      print("HotlineFolderDownloadClientNew[\(referenceNumber)]: Failed to download folder: \(error)")
+      print("HotlineFolderDownloadClient[\(referenceNumber)]: Failed to download folder: \(error)")
       self.downloadTask = nil
       progressHandler?(.error(error))
       throw error
@@ -82,7 +78,7 @@ public class HotlineFolderDownloadClientNew: @MainActor HotlineTransferClient {
     }
   }
 
-  // MARK: - Private Implementation
+  // MARK: - Implementation
 
   private func performDownload(
     to destination: HotlineDownloadLocation,
@@ -113,7 +109,7 @@ public class HotlineFolderDownloadClientNew: @MainActor HotlineTransferClient {
       destinationFilename = destinationURL.lastPathComponent
     }
 
-    print("HotlineFolderDownloadClientNew[\(referenceNumber)]: Downloading folder to \(destinationURL.path)")
+    print("HotlineFolderDownloadClient[\(referenceNumber)]: Downloading folder to \(destinationURL.path)")
 
     // Create destination folder
     try? fm.removeItem(at: destinationURL)
@@ -127,7 +123,7 @@ public class HotlineFolderDownloadClientNew: @MainActor HotlineTransferClient {
     self.folderProgress = progress
 
     // Send initial magic header
-    print("HotlineFolderDownloadClientNew[\(self.referenceNumber)]: Sending HTXF magic")
+    print("HotlineFolderDownloadClient[\(self.referenceNumber)]: Sending HTXF magic")
     try await socket.write(Data(endian: .big) {
       "HTXF".fourCharCode()
       self.referenceNumber
@@ -157,14 +153,14 @@ public class HotlineFolderDownloadClientNew: @MainActor HotlineTransferClient {
       }
 
       let joinedPath = pathComponents.joined(separator: "/")
-      print("HotlineFolderDownloadClientNew[\(referenceNumber)]: Item type=\(itemType) path=\(joinedPath)")
+      print("HotlineFolderDownloadClient[\(referenceNumber)]: Item type=\(itemType) path=\(joinedPath)")
 
       if itemType == 1 {
         // Folder entry - no progress shown for folder creation
         if !pathComponents.isEmpty {
           let folderURL = destinationURL.appendingPathComponents(pathComponents)
           try fm.createDirectory(at: folderURL, withIntermediateDirectories: true)
-          print("HotlineFolderDownloadClientNew[\(self.referenceNumber)]: Created folder at \(folderURL.path)")
+          print("HotlineFolderDownloadClient[\(self.referenceNumber)]: Created folder at \(folderURL.path)")
         }
 
         completedItemCount += 1
@@ -187,7 +183,7 @@ public class HotlineFolderDownloadClientNew: @MainActor HotlineTransferClient {
         let fileSize = fileSizeData.readUInt32(at: 0)!
         totalBytesTransferred += 4
 
-        print("HotlineFolderDownloadClientNew[\(referenceNumber)]: File '\(fileName)' size: \(fileSize) bytes")
+        print("HotlineFolderDownloadClient[\(referenceNumber)]: File '\(fileName)' size: \(fileSize) bytes")
 
         // Notify item progress before download starts
         completedItemCount += 1
@@ -213,7 +209,7 @@ public class HotlineFolderDownloadClientNew: @MainActor HotlineTransferClient {
         totalBytesTransferred += fileBytesRead
         self.transferSize = totalBytesTransferred
 
-        print("HotlineFolderDownloadClientNew[\(referenceNumber)]: Downloaded file to \(fileURL.path)")
+        print("HotlineFolderDownloadClient[\(referenceNumber)]: Downloaded file to \(fileURL.path)")
 
         // Request next item if not done
         if completedItemCount < folderItemCount {
@@ -222,7 +218,7 @@ public class HotlineFolderDownloadClientNew: @MainActor HotlineTransferClient {
 
       } else {
         // Unknown item type
-        print("HotlineFolderDownloadClientNew[\(referenceNumber)]: Unknown item type \(itemType), skipping")
+        print("HotlineFolderDownloadClient[\(referenceNumber)]: Unknown item type \(itemType), skipping")
         completedItemCount += 1
 
         if completedItemCount < folderItemCount {
@@ -231,7 +227,7 @@ public class HotlineFolderDownloadClientNew: @MainActor HotlineTransferClient {
       }
     }
 
-    print("HotlineFolderDownloadClientNew[\(referenceNumber)]: Download complete!")
+    print("HotlineFolderDownloadClient[\(referenceNumber)]: Download complete!")
 
     // Ensure folder progress shows 100% complete
     self.folderProgress?.completedUnitCount = Int64(self.transferTotal)
@@ -244,14 +240,14 @@ public class HotlineFolderDownloadClientNew: @MainActor HotlineTransferClient {
   // MARK: - Helper Methods
 
   private func connectToTransferServer() async throws -> NetSocket {
-    print("HotlineFolderDownloadClientNew[\(referenceNumber)]: Connecting to \(serverAddress):\(serverPort + 1)")
+    print("HotlineFolderDownloadClient[\(referenceNumber)]: Connecting to \(serverAddress):\(serverPort + 1)")
 
     let socket = try await NetSocket.connect(
       host: self.serverAddress,
       port: self.serverPort + 1
     )
 
-    print("HotlineFolderDownloadClientNew[\(referenceNumber)]: Connected!")
+    print("HotlineFolderDownloadClient[\(referenceNumber)]: Connected!")
     return socket
   }
 
@@ -260,7 +256,7 @@ public class HotlineFolderDownloadClientNew: @MainActor HotlineTransferClient {
       action.rawValue
     }
     try await socket.write(actionData)
-    print("HotlineFolderDownloadClientNew[\(referenceNumber)]: Sent action: \(action)")
+    print("HotlineFolderDownloadClient[\(referenceNumber)]: Sent action: \(action)")
   }
 
   private func parseItemHeaderPath(_ headerData: Data) -> (type: UInt16, components: [String])? {
@@ -314,7 +310,7 @@ public class HotlineFolderDownloadClientNew: @MainActor HotlineTransferClient {
     let totalBytesNow = totalBytesTransferredSoFar + bytesRead
     self.folderProgress?.completedUnitCount = Int64(totalBytesNow)
 
-    print("HotlineFolderDownloadClientNew[\(referenceNumber)]: File has \(header.forkCount) forks")
+    print("HotlineFolderDownloadClient[\(referenceNumber)]: File has \(header.forkCount) forks")
 
     var resourceForkData: Data?
     var fileHandle: FileHandle?
@@ -340,7 +336,7 @@ public class HotlineFolderDownloadClientNew: @MainActor HotlineTransferClient {
 
       if forkHeader.isInfoFork {
         // Read INFO fork
-        print("HotlineFolderDownloadClientNew[\(referenceNumber)]: Reading INFO fork (\(forkHeader.dataSize) bytes)")
+        print("HotlineFolderDownloadClient[\(referenceNumber)]: Reading INFO fork (\(forkHeader.dataSize) bytes)")
         let infoData = try await socket.read(Int(forkHeader.dataSize))
         bytesRead += infoData.count
 
@@ -366,9 +362,10 @@ public class HotlineFolderDownloadClientNew: @MainActor HotlineTransferClient {
         try? fm.removeItem(at: finalURL)
         fileHandle = try fm.createHotlineFile(at: finalURL, infoFork: info)
 
-      } else if forkHeader.isDataFork {
+      }
+      else if forkHeader.isDataFork {
         // Stream DATA fork to disk
-        print("HotlineFolderDownloadClientNew[\(referenceNumber)]: Reading DATA fork (\(forkHeader.dataSize) bytes)")
+        print("HotlineFolderDownloadClient[\(referenceNumber)]: Reading DATA fork (\(forkHeader.dataSize) bytes)")
 
         guard let fh = fileHandle else {
           throw HotlineTransferClientError.failedToTransfer

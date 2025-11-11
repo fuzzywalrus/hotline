@@ -376,11 +376,11 @@ struct FilesView: View {
   private func openPreviewWindow(_ previewInfo: PreviewFileInfo) {
     switch previewInfo.previewType {
     case .image:
-      openWindow(id: "preview-quicklook", value: previewInfo)
+      self.openWindow(id: "preview-quicklook", value: previewInfo)
     case .text:
-      openWindow(id: "preview-quicklook", value: previewInfo)
+      self.openWindow(id: "preview-quicklook", value: previewInfo)
     case .unknown:
-      openWindow(id: "preview-quicklook", value: previewInfo)
+      self.openWindow(id: "preview-quicklook", value: previewInfo)
       return
     }
   }
@@ -397,10 +397,10 @@ struct FilesView: View {
   
   @MainActor private func downloadFile(_ file: FileInfo) {
     if file.isFolder {
-      model.downloadFolderNew(file.name, path: file.path)
+      model.downloadFolder(file.name, path: file.path)
     }
     else {
-      model.downloadFileNew(file.name, path: file.path)
+      model.downloadFile(file.name, path: file.path)
     }
   }
   
@@ -442,9 +442,12 @@ struct FilesView: View {
       return
     }
   
-    model.previewFile(file.name, path: file.path) { info in
+    self.model.previewFile(file.name, path: file.path) { info in
       if let info = info {
-        openPreviewWindow(info)
+        var extendedInfo = info
+        extendedInfo.creator = file.creator
+        extendedInfo.type = file.type
+        self.openPreviewWindow(extendedInfo)
       }
     }
   }

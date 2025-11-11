@@ -93,11 +93,11 @@ public struct HotlineServerInfo: Sendable {
 
 // MARK: - Hotline Client
 
-/// Modern async/await-based Hotline protocol client
+/// A client for connecting to and interacting with Hotline servers.
 ///
 /// Example usage:
 /// ```swift
-/// let client = try await HotlineClientNew.connect(
+/// let client = try await HotlineClient.connect(
 ///   host: "server.example.com",
 ///   port: 5500,
 ///   login: HotlineLogin(login: "guest", password: "", username: "John", iconID: 414)
@@ -123,7 +123,7 @@ public struct HotlineServerInfo: Sendable {
 /// // Get user list
 /// let users = try await client.getUserList()
 /// ```
-public actor HotlineClientNew {
+public actor HotlineClient {
   // MARK: - Properties
 
   private let socket: NetSocket
@@ -189,23 +189,23 @@ public actor HotlineClientNew {
     host: String,
     port: UInt16 = 5500,
     login: HotlineLogin
-  ) async throws -> HotlineClientNew {
-    print("HotlineClientNew.connect(): Starting connection to \(host):\(port) as '\(login.username)'")
+  ) async throws -> HotlineClient {
+    print("HotlineClient.connect(): Starting connection to \(host):\(port) as '\(login.username)'")
 
     // Connect socket
-    print("HotlineClientNew.connect(): Connecting socket...")
+    print("HotlineClient.connect(): Connecting socket...")
     let socket = try await NetSocket.connect(host: host, port: port)
-    print("HotlineClientNew.connect(): Socket connected")
+    print("HotlineClient.connect(): Socket connected")
 
     // Perform handshake
-    print("HotlineClientNew.connect(): Sending handshake...")
+    print("HotlineClient.connect(): Sending handshake...")
     try await socket.write(handshakeData)
     let handshakeResponse = try await socket.read(8)
-    print("HotlineClientNew.connect(): Handshake response received")
+    print("HotlineClient.connect(): Handshake response received")
 
     // Verify handshake
     guard handshakeResponse.prefix(4) == Data([0x54, 0x52, 0x54, 0x50]) else {
-      print("HotlineClientNew.connect(): Invalid handshake response")
+      print("HotlineClient.connect(): Invalid handshake response")
       throw HotlineClientError.connectionFailed(
         NSError(domain: "HotlineClient", code: -1, userInfo: [
           NSLocalizedDescriptionKey: "Invalid handshake response"
@@ -215,7 +215,7 @@ public actor HotlineClientNew {
 
     let errorCode = handshakeResponse.withUnsafeBytes { $0.load(fromByteOffset: 4, as: UInt32.self) }
     guard errorCode.bigEndian == 0 else {
-      print("HotlineClientNew.connect(): Handshake failed with error code \(errorCode)")
+      print("HotlineClient.connect(): Handshake failed with error code \(errorCode)")
       throw HotlineClientError.connectionFailed(
         NSError(domain: "HotlineClient", code: Int(errorCode), userInfo: [
           NSLocalizedDescriptionKey: "Handshake failed with error code \(errorCode)"
@@ -224,24 +224,24 @@ public actor HotlineClientNew {
     }
 
     // Create client
-    print("HotlineClientNew.connect(): Creating client instance")
-    let client = HotlineClientNew(socket: socket)
+    print("HotlineClient.connect(): Creating client instance")
+    let client = HotlineClient(socket: socket)
 
     // Start receive loop
-    print("HotlineClientNew.connect(): Starting receive loop")
+    print("HotlineClient.connect(): Starting receive loop")
     await client.startReceiveLoop()
 
     // Perform login
-    print("HotlineClientNew.connect(): Performing login")
+    print("HotlineClient.connect(): Performing login")
     let serverInfo = try await client.performLogin(login)
     await client.setServerInfo(serverInfo)
-    print("HotlineClientNew.connect(): Login successful")
+    print("HotlineClient.connect(): Login successful")
 
     // Start keep-alive
-    print("HotlineClientNew.connect(): Starting keep-alive")
+    print("HotlineClient.connect(): Starting keep-alive")
     await client.startKeepAlive()
 
-    print("HotlineClientNew.connect(): Connected to \(serverInfo.name) (v\(serverInfo.version))")
+    print("HotlineClient.connect(): Connected to \(serverInfo.name) (v\(serverInfo.version))")
 
     return client
   }
@@ -296,19 +296,19 @@ public actor HotlineClientNew {
 
     isConnected = false
 
-    print("HotlineClientNew.disconnect(): Starting disconnect")
+    print("HotlineClient.disconnect(): Starting disconnect")
     self.receiveTask?.cancel()
     self.keepAliveTask?.cancel()
     await self.socket.close()
     self.failAllPendingTransactions(HotlineClientError.notConnected)
     self.eventContinuation.finish()
-    print("HotlineClientNew.disconnect(): Disconnect complete")
+    print("HotlineClient.disconnect(): Disconnect complete")
   }
 
   // MARK: - Receive Loop
 
   private func startReceiveLoop() {
-    print("HotlineClientNew.startReceiveLoop(): Creating receive task")
+    print("HotlineClient.startReceiveLoop(): Creating receive task")
     self.receiveTask = Task { [weak self] in
       guard let self else {
         return
@@ -320,21 +320,21 @@ public actor HotlineClientNew {
           let transaction = try await self.socket.receive(HotlineTransaction.self, endian: .big)
           await self.handleTransaction(transaction)
         }
-        print("HotlineClientNew.startReceiveLoop(): Task cancelled, exiting loop")
+        print("HotlineClient.startReceiveLoop(): Task cancelled, exiting loop")
       } catch {
         if Task.isCancelled || error is CancellationError {
-          print("HotlineClientNew.startReceiveLoop(): Receive loop cancelled")
+          print("HotlineClient.startReceiveLoop(): Receive loop cancelled")
         } else {
-          print("HotlineClientNew.startReceiveLoop(): Receive loop error: \(error)")
+          print("HotlineClient.startReceiveLoop(): Receive loop error: \(error)")
           await self.disconnect()
         }
       }
-      print("HotlineClientNew.startReceiveLoop(): Receive loop ended")
+      print("HotlineClient.startReceiveLoop(): Receive loop ended")
     }
   }
 
   private func handleTransaction(_ transaction: HotlineTransaction) {
-    print("HotlineClientNew: <= \(transaction.type) [\(transaction.id)]")
+    print("HotlineClient: <= \(transaction.type) [\(transaction.id)]")
 
     // Check if this is a reply to a pending transaction
     if transaction.isReply == 1 || transaction.type == .reply {
@@ -348,7 +348,7 @@ public actor HotlineClientNew {
 
   private func handleReply(_ transaction: HotlineTransaction) {
     guard let continuation = pendingTransactions.removeValue(forKey: transaction.id) else {
-      print("HotlineClientNew: Received reply for unknown transaction \(transaction.id)")
+      print("HotlineClient: Received reply for unknown transaction \(transaction.id)")
       return
     }
 
@@ -359,7 +359,6 @@ public actor HotlineClientNew {
         message: errorText
       ))
     } else {
-      print("HELLO")
       continuation.resume(returning: transaction)
     }
   }
@@ -417,14 +416,15 @@ public actor HotlineClientNew {
       }
 
     default:
-      print("HotlineClientNew: Unhandled event type \(transaction.type)")
+      print("HotlineClient: Unhandled event type \(transaction.type)")
     }
   }
 
   // MARK: - Transaction Sending
 
+  @discardableResult
   private func sendTransaction(_ transaction: HotlineTransaction, timeout: TimeInterval = 30.0) async throws -> HotlineTransaction {
-    print("HotlineClientNew: => \(transaction.type) [\(transaction.id)]")
+    print("HotlineClient: => \(transaction.type) [\(transaction.id)]")
 
     let transactionID = transaction.id
 
@@ -518,7 +518,7 @@ public actor HotlineClientNew {
         let _ = try? await self.getUserList()
       }
     } catch {
-      print("HotlineClientNew: Keep-alive failed: \(error)")
+      print("HotlineClient: Keep-alive failed: \(error)")
     }
   }
 
@@ -605,7 +605,7 @@ public actor HotlineClientNew {
     try await socket.send(transaction, endian: .big)
   }
 
-  // MARK: - Public API - Files
+  // MARK: - Files
 
   /// Get the file list for a directory
   ///
@@ -617,7 +617,7 @@ public actor HotlineClientNew {
       transaction.setFieldPath(type: .filePath, val: path)
     }
 
-    let reply = try await sendTransaction(transaction)
+    let reply = try await self.sendTransaction(transaction)
 
     var files: [HotlineFile] = []
     for field in reply.getFieldList(type: .fileNameWithInfo) {
@@ -649,7 +649,7 @@ public actor HotlineClientNew {
       transaction.setFieldUInt32(type: .fileTransferOptions, val: 2)
     }
 
-    let reply = try await sendTransaction(transaction)
+    let reply = try await self.sendTransaction(transaction)
 
     guard
       let transferSize = reply.getField(type: .transferSize)?.getInteger(),
@@ -664,7 +664,7 @@ public actor HotlineClientNew {
     return (referenceNumber, transferSize, fileSize, waitingCount)
   }
 
-  // MARK: - Public API - News
+  // MARK: - News
 
   /// Get news categories at a path
   ///
@@ -676,7 +676,7 @@ public actor HotlineClientNew {
       transaction.setFieldPath(type: .newsPath, val: path)
     }
 
-    let reply = try await sendTransaction(transaction)
+    let reply = try await self.sendTransaction(transaction)
 
     var categories: [HotlineNewsCategory] = []
     for field in reply.getFieldList(type: .newsCategoryListData15) {
@@ -698,7 +698,7 @@ public actor HotlineClientNew {
       transaction.setFieldPath(type: .newsPath, val: path)
     }
 
-    let reply = try await sendTransaction(transaction)
+    let reply = try await self.sendTransaction(transaction)
 
     guard let articleData = reply.getField(type: .newsArticleListData) else {
       return []
@@ -725,7 +725,7 @@ public actor HotlineClientNew {
     transaction.setFieldUInt32(type: .newsArticleID, val: id)
     transaction.setFieldString(type: .newsArticleDataFlavor, val: flavor, encoding: .ascii)
 
-    let reply = try await sendTransaction(transaction)
+    let reply = try await self.sendTransaction(transaction)
     return reply.getField(type: .newsArticleData)?.getString()
   }
 
@@ -754,17 +754,17 @@ public actor HotlineClientNew {
     transaction.setFieldUInt32(type: .newsArticleFlags, val: 0)
     transaction.setFieldString(type: .newsArticleData, val: text)
 
-    _ = try await sendTransaction(transaction)
+    try await self.sendTransaction(transaction)
   }
 
-  // MARK: - Public API - Message Board
+  // MARK: - Message Board
 
   /// Get message board posts
   ///
   /// - Returns: Array of message strings
   public func getMessageBoard() async throws -> [String] {
     let transaction = HotlineTransaction(id: self.generateTransactionID(), type: .getMessageBoard)
-    let reply = try await sendTransaction(transaction)
+    let reply = try await self.sendTransaction(transaction)
 
     guard let text = reply.getField(type: .data)?.getString() else {
       return []
@@ -784,10 +784,10 @@ public actor HotlineClientNew {
     var transaction = HotlineTransaction(id: self.generateTransactionID(), type: .oldPostNews)
     transaction.setFieldString(type: .data, val: text, encoding: .macOSRoman)
 
-    try await socket.send(transaction, endian: .big)
+    try await self.socket.send(transaction, endian: .big)
   }
 
-  // MARK: - Public API - File Operations
+  // MARK: - File Operations
 
   /// Get detailed information about a file
   ///
@@ -840,7 +840,7 @@ public actor HotlineClientNew {
     transaction.setFieldPath(type: .filePath, val: path)
 
     do {
-      _ = try await sendTransaction(transaction)
+      try await self.sendTransaction(transaction)
       return true
     } catch {
       return false
@@ -854,7 +854,7 @@ public actor HotlineClientNew {
   /// - Returns: Array of user accounts sorted by login
   public func getAccounts() async throws -> [HotlineAccount] {
     let transaction = HotlineTransaction(id: self.generateTransactionID(), type: .getAccounts)
-    let reply = try await sendTransaction(transaction)
+    let reply = try await self.sendTransaction(transaction)
 
     let accountFields = reply.getFieldList(type: .data)
     var accounts: [HotlineAccount] = []
@@ -886,7 +886,7 @@ public actor HotlineClientNew {
       transaction.setFieldEncodedString(type: .userPassword, val: password)
     }
 
-    _ = try await sendTransaction(transaction)
+    try await self.sendTransaction(transaction)
   }
 
   /// Update an existing user account (requires admin access)
@@ -919,7 +919,7 @@ public actor HotlineClientNew {
       transaction.setFieldEncodedString(type: .userPassword, val: password!)
     }
 
-    _ = try await sendTransaction(transaction)
+    try await self.sendTransaction(transaction)
   }
 
   /// Delete a user account (requires admin access)
@@ -929,7 +929,7 @@ public actor HotlineClientNew {
     var transaction = HotlineTransaction(id: self.generateTransactionID(), type: .deleteUser)
     transaction.setFieldEncodedString(type: .userLogin, val: login)
 
-    _ = try await sendTransaction(transaction)
+    try await self.sendTransaction(transaction)
   }
 
   // MARK: - Banners
@@ -940,7 +940,7 @@ public actor HotlineClientNew {
   /// - Throws: HotlineClientError if not connected or server doesn't support banners
   public func downloadBanner() async throws -> (referenceNumber: UInt32, transferSize: Int)? {
     let transaction = HotlineTransaction(id: self.generateTransactionID(), type: .downloadBanner)
-    let reply = try await sendTransaction(transaction)
+    let reply = try await self.sendTransaction(transaction)
 
     guard
       let transferSizeField = reply.getField(type: .transferSize),
@@ -972,7 +972,7 @@ public actor HotlineClientNew {
       transaction.setFieldUInt32(type: .fileTransferOptions, val: 2)
     }
 
-    let reply = try await sendTransaction(transaction)
+    let reply = try await self.sendTransaction(transaction)
 
     guard
       let transferSizeField = reply.getField(type: .transferSize),
@@ -1000,7 +1000,7 @@ public actor HotlineClientNew {
     transaction.setFieldString(type: .fileName, val: name)
     transaction.setFieldPath(type: .filePath, val: path)
 
-    let reply = try await sendTransaction(transaction)
+    let reply = try await self.sendTransaction(transaction)
 
     guard
       let transferSizeField = reply.getField(type: .transferSize),
@@ -1027,7 +1027,7 @@ public actor HotlineClientNew {
     transaction.setFieldString(type: .fileName, val: name)
     transaction.setFieldPath(type: .filePath, val: path)
 
-    let reply = try await sendTransaction(transaction)
+    let reply = try await self.sendTransaction(transaction)
 
     guard
       let transferReferenceField = reply.getField(type: .referenceNumber),
@@ -1046,7 +1046,7 @@ public actor HotlineClientNew {
   ///   - path: Directory path where the folder should be uploaded
   /// - Returns: Reference number for the upload transfer
   public func uploadFolder(name: String, path: [String], fileCount: UInt32, totalSize: UInt32) async throws -> UInt32? {
-    print("HotlineClientNew: uploadFolder request - name='\(name)', path=\(path), fileCount=\(fileCount), totalSize=\(totalSize)")
+    print("HotlineClient: uploadFolder request - name='\(name)', path=\(path), fileCount=\(fileCount), totalSize=\(totalSize)")
 
     var transaction = HotlineTransaction(id: self.generateTransactionID(), type: .uploadFolder)
     transaction.setFieldString(type: .fileName, val: name)
@@ -1054,7 +1054,7 @@ public actor HotlineClientNew {
     transaction.setFieldUInt32(type: .transferSize, val: totalSize)
     transaction.setFieldUInt16(type: .folderItemCount, val: UInt16(truncatingIfNeeded: fileCount))
 
-    let reply = try await sendTransaction(transaction)
+    let reply = try await self.sendTransaction(transaction)
 
     guard
       let transferReferenceField = reply.getField(type: .referenceNumber),

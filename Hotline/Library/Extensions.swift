@@ -2,23 +2,85 @@ import Foundation
 import SwiftUI
 import UniformTypeIdentifiers
 
+extension FileManager {
+  @discardableResult
+  func moveToDownloads(from sourceURL: URL, using filename: String, bounceDock: Bool = false) -> Bool {
+    let filePath = URL.downloadsDirectory.generateUniqueFilePath(filename: filename)
+    let destinationURL = URL(filePath: filePath).resolvingSymlinksInPath()
+    
+    do {
+      try FileManager.default.moveItem(at: sourceURL.resolvingSymlinksInPath(), to: destinationURL)
+    }
+    catch {
+      return false
+    }
+    
+    if bounceDock {
+      #if os(macOS)
+      DistributedNotificationCenter.default().post(name: .init("com.apple.DownloadFileFinished"), object: destinationURL.path)
+      #endif
+    }
+    
+    return true
+  }
+  
+  @discardableResult
+  func copyToDownloads(from sourceURL: URL, using filename: String, bounceDock: Bool = false) -> Bool {
+    let filePath = URL.downloadsDirectory.generateUniqueFilePath(filename: filename)
+    let destinationURL = URL(filePath: filePath).resolvingSymlinksInPath()
+    
+    do {
+      try FileManager.default.copyItem(at: sourceURL.resolvingSymlinksInPath(), to: destinationURL)
+    }
+    catch {
+      return false
+    }
+    
+    if bounceDock {
+      #if os(macOS)
+      DistributedNotificationCenter.default().post(name: .init("com.apple.DownloadFileFinished"), object: destinationURL.path)
+      #endif
+    }
+    
+    return true
+  }
+}
+
+// MARK: -
+
+extension View {
+  @ViewBuilder
+  func applyNavigationDocumentIfPresent(_ url: URL?) -> some View {
+    if let url {
+      self.navigationDocument(url)
+    } else {
+      self
+    }
+  }
+}
+
+// MARK: -
+
 extension Data {
   func saveAsFileToDownloads(filename: String, bounceDock: Bool = true) -> Bool {
-    let folderURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)[0]
-    let filePath = folderURL.generateUniqueFilePath(filename: filename)
-    if FileManager.default.createFile(atPath: filePath, contents: nil) {
-      if let h = FileHandle(forWritingAtPath: filePath) {
-        try? h.write(contentsOf: self)
-        try? h.close()
-        if bounceDock {
-          #if os(macOS)
-          var downloadURL = URL(filePath: filePath)
-          downloadURL.resolveSymlinksInPath()
-          DistributedNotificationCenter.default().post(name: .init("com.apple.DownloadFileFinished"), object: downloadURL.path)
-          #endif
-        }
-        return true
+    let filePath = URL.downloadsDirectory.generateUniqueFilePath(filename: filename)
+    
+    if FileManager.default.createFile(atPath: filePath, contents: self) {
+      if bounceDock {
+        #if os(macOS)
+        var downloadURL = URL(filePath: filePath)
+        downloadURL.resolveSymlinksInPath()
+        DistributedNotificationCenter.default().post(name: .init("com.apple.DownloadFileFinished"), object: downloadURL.path)
+        #endif
       }
+      return true
+    
+//    if FileManager.default.createFile(atPath: filePath, contents: nil) {
+//      if let h = FileHandle(forWritingAtPath: filePath) {
+//        try? h.write(contentsOf: self)
+//        try? h.close()
+//        
+//      }
     }
     return false
   }

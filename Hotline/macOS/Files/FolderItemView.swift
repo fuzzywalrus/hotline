@@ -81,7 +81,7 @@ struct FolderItemView: View {
         .opacity(file.isUnavailable ? 0.5 : 1.0)
       
       if loading {
-        ProgressView().controlSize(.small).padding([.leading, .trailing], 5)
+        ProgressView().controlSize(.mini).padding([.leading, .trailing], 5)
       }
       Spacer()
       if !file.isUnavailable {

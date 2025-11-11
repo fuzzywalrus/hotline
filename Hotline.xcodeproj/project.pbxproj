@@ -22,9 +22,9 @@
 		DA32CD4B2B29318E0053B98B /* FileInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA32CD4A2B29318E0053B98B /* FileInfo.swift */; };
 		DA32CD4D2B2931B50053B98B /* ChatMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA32CD4C2B2931B50053B98B /* ChatMessage.swift */; };
 		DA32CD4F2B2931CC0053B98B /* NewsInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA32CD4E2B2931CC0053B98B /* NewsInfo.swift */; };
-		DA3429AE2EB9C0280010784E /* HotlineFileUploadClientNew.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA3429AD2EB9C0220010784E /* HotlineFileUploadClientNew.swift */; };
-		DA3429B02EBA70790010784E /* HotlineFolderUploadClientNew.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA3429AF2EBA70790010784E /* HotlineFolderUploadClientNew.swift */; };
-		DA3429B32EBA7ADF0010784E /* HotlineFilePreviewClientNew.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA3429B22EBA7ADE0010784E /* HotlineFilePreviewClientNew.swift */; };
+		DA3429AE2EB9C0280010784E /* HotlineFileUploadClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA3429AD2EB9C0220010784E /* HotlineFileUploadClient.swift */; };
+		DA3429B02EBA70790010784E /* HotlineFolderUploadClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA3429AF2EBA70790010784E /* HotlineFolderUploadClient.swift */; };
+		DA3429B32EBA7ADF0010784E /* HotlineFilePreviewClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA3429B22EBA7ADE0010784E /* HotlineFilePreviewClient.swift */; };
 		DA3429B52EBA8A450010784E /* FilePreviewState.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA3429B42EBA8A450010784E /* FilePreviewState.swift */; };
 		DA3429B72EBAB1750010784E /* QuickLookPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA3429B62EBAB1750010784E /* QuickLookPreviewView.swift */; platformFilters = (macos, ); };
 		DA3429B92EBAB2130010784E /* FilePreviewQuickLookView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA3429B82EBAB2130010784E /* FilePreviewQuickLookView.swift */; };
@@ -49,11 +49,11 @@
 		DA5268AD2EB12FE200DCB941 /* ServerState.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA5268AC2EB12FE200DCB941 /* ServerState.swift */; };
 		DA5268AF2EB2682B00DCB941 /* HotlineClientNew.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA5268AE2EB2682B00DCB941 /* HotlineClientNew.swift */; };
 		DA5268B12EB2708E00DCB941 /* HotlineState.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA5268B02EB2708E00DCB941 /* HotlineState.swift */; };
-		DA5268B32EB6806E00DCB941 /* HotlineFileDownloadClientNew.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA5268B22EB6806E00DCB941 /* HotlineFileDownloadClientNew.swift */; };
+		DA5268B32EB6806E00DCB941 /* HotlineFileDownloadClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA5268B22EB6806E00DCB941 /* HotlineFileDownloadClient.swift */; };
 		DA5268B52EB6840A00DCB941 /* TransfersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA5268B42EB6840A00DCB941 /* TransfersView.swift */; };
 		DA5268B82EB916AF00DCB941 /* TransferRateEstimator.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA5268B72EB916AF00DCB941 /* TransferRateEstimator.swift */; };
 		DA5268BA2EB91B5E00DCB941 /* FileProgress.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA5268B92EB91B5E00DCB941 /* FileProgress.swift */; };
-		DA5268BC2EB95A7700DCB941 /* HotlineFolderDownloadClientNew.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA5268BB2EB95A7700DCB941 /* HotlineFolderDownloadClientNew.swift */; };
+		DA5268BC2EB95A7700DCB941 /* HotlineFolderDownloadClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA5268BB2EB95A7700DCB941 /* HotlineFolderDownloadClient.swift */; };
 		DA55AC732BE42AF000034857 /* AsyncLinkPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA55AC722BE42AF000034857 /* AsyncLinkPreview.swift */; platformFilters = (macos, ); };
 		DA55AC752BE4888300034857 /* InstantMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA55AC742BE4888300034857 /* InstantMessage.swift */; };
 		DA55AC772BE589F700034857 /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA55AC762BE589F700034857 /* AboutView.swift */; platformFilters = (macos, ); };
@@ -136,9 +136,9 @@
 		DA32CD4A2B29318E0053B98B /* FileInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileInfo.swift; sourceTree = "<group>"; };
 		DA32CD4C2B2931B50053B98B /* ChatMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatMessage.swift; sourceTree = "<group>"; };
 		DA32CD4E2B2931CC0053B98B /* NewsInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewsInfo.swift; sourceTree = "<group>"; };
-		DA3429AD2EB9C0220010784E /* HotlineFileUploadClientNew.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotlineFileUploadClientNew.swift; sourceTree = "<group>"; };
-		DA3429AF2EBA70790010784E /* HotlineFolderUploadClientNew.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotlineFolderUploadClientNew.swift; sourceTree = "<group>"; };
-		DA3429B22EBA7ADE0010784E /* HotlineFilePreviewClientNew.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotlineFilePreviewClientNew.swift; sourceTree = "<group>"; };
+		DA3429AD2EB9C0220010784E /* HotlineFileUploadClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotlineFileUploadClient.swift; sourceTree = "<group>"; };
+		DA3429AF2EBA70790010784E /* HotlineFolderUploadClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotlineFolderUploadClient.swift; sourceTree = "<group>"; };
+		DA3429B22EBA7ADE0010784E /* HotlineFilePreviewClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotlineFilePreviewClient.swift; sourceTree = "<group>"; };
 		DA3429B42EBA8A450010784E /* FilePreviewState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilePreviewState.swift; sourceTree = "<group>"; };
 		DA3429B62EBAB1750010784E /* QuickLookPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickLookPreviewView.swift; sourceTree = "<group>"; };
 		DA3429B82EBAB2130010784E /* FilePreviewQuickLookView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilePreviewQuickLookView.swift; sourceTree = "<group>"; };
@@ -162,11 +162,11 @@
 		DA5268AC2EB12FE200DCB941 /* ServerState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerState.swift; sourceTree = "<group>"; };
 		DA5268AE2EB2682B00DCB941 /* HotlineClientNew.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotlineClientNew.swift; sourceTree = "<group>"; };
 		DA5268B02EB2708E00DCB941 /* HotlineState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotlineState.swift; sourceTree = "<group>"; };
-		DA5268B22EB6806E00DCB941 /* HotlineFileDownloadClientNew.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotlineFileDownloadClientNew.swift; sourceTree = "<group>"; };
+		DA5268B22EB6806E00DCB941 /* HotlineFileDownloadClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotlineFileDownloadClient.swift; sourceTree = "<group>"; };
 		DA5268B42EB6840A00DCB941 /* TransfersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransfersView.swift; sourceTree = "<group>"; };
 		DA5268B72EB916AF00DCB941 /* TransferRateEstimator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransferRateEstimator.swift; sourceTree = "<group>"; };
 		DA5268B92EB91B5E00DCB941 /* FileProgress.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileProgress.swift; sourceTree = "<group>"; };
-		DA5268BB2EB95A7700DCB941 /* HotlineFolderDownloadClientNew.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotlineFolderDownloadClientNew.swift; sourceTree = "<group>"; };
+		DA5268BB2EB95A7700DCB941 /* HotlineFolderDownloadClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotlineFolderDownloadClient.swift; sourceTree = "<group>"; };
 		DA55AC722BE42AF000034857 /* AsyncLinkPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AsyncLinkPreview.swift; sourceTree = "<group>"; };
 		DA55AC742BE4888300034857 /* InstantMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstantMessage.swift; sourceTree = "<group>"; };
 		DA55AC762BE589F700034857 /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
@@ -248,11 +248,11 @@
 			isa = PBXGroup;
 			children = (
 				DA5753672B33E88A00FAC277 /* HotlineTransferClient.swift */,
-				DA3429B22EBA7ADE0010784E /* HotlineFilePreviewClientNew.swift */,
-				DA5268B22EB6806E00DCB941 /* HotlineFileDownloadClientNew.swift */,
-				DA3429AD2EB9C0220010784E /* HotlineFileUploadClientNew.swift */,
-				DA5268BB2EB95A7700DCB941 /* HotlineFolderDownloadClientNew.swift */,
-				DA3429AF2EBA70790010784E /* HotlineFolderUploadClientNew.swift */,
+				DA3429B22EBA7ADE0010784E /* HotlineFilePreviewClient.swift */,
+				DA5268B22EB6806E00DCB941 /* HotlineFileDownloadClient.swift */,
+				DA3429AD2EB9C0220010784E /* HotlineFileUploadClient.swift */,
+				DA5268BB2EB95A7700DCB941 /* HotlineFolderDownloadClient.swift */,
+				DA3429AF2EBA70790010784E /* HotlineFolderUploadClient.swift */,
 			);
 			path = Transfers;
 			sourceTree = "<group>";
@@ -639,9 +639,9 @@
 				DA52689E2EB073A400DCB941 /* IconSettingsView.swift in Sources */,
 				DAC3D9832BC33FD000A727C9 /* AppState.swift in Sources */,
 				DA65499C2BEC3FBD00EDB697 /* ServerAgreementView.swift in Sources */,
-				DA5268BC2EB95A7700DCB941 /* HotlineFolderDownloadClientNew.swift in Sources */,
+				DA5268BC2EB95A7700DCB941 /* HotlineFolderDownloadClient.swift in Sources */,
 				DA2863DD2B3E8B7000A7D050 /* FilePreview.swift in Sources */,
-				DA3429B02EBA70790010784E /* HotlineFolderUploadClientNew.swift in Sources */,
+				DA3429B02EBA70790010784E /* HotlineFolderUploadClient.swift in Sources */,
 				DA5268AB2EB11EA300DCB941 /* ColorArt.swift in Sources */,
 				DA2863D82B37AD1C00A7D050 /* SettingsView.swift in Sources */,
 				DA5268BA2EB91B5E00DCB941 /* FileProgress.swift in Sources */,
@@ -672,7 +672,7 @@
 				DA32CD4B2B29318E0053B98B /* FileInfo.swift in Sources */,
 				DAF5BC6C2EC2727700551E4D /* ConnectView.swift in Sources */,
 				DA20BBE12BF5237600B94E7C /* Bookmark.swift in Sources */,
-				DA3429B32EBA7ADF0010784E /* HotlineFilePreviewClientNew.swift in Sources */,
+				DA3429B32EBA7ADF0010784E /* HotlineFilePreviewClient.swift in Sources */,
 				DA9CAFCB2B126E3300CDA197 /* HotlineTrackerClient.swift in Sources */,
 				DA2863DA2B37BF6E00A7D050 /* Preferences.swift in Sources */,
 				DA32CD4F2B2931CC0053B98B /* NewsInfo.swift in Sources */,
@@ -706,7 +706,7 @@
 				DA501BF02EBED848001714F8 /* BonjourState.swift in Sources */,
 				DAAEE66F2B47625600A5BA07 /* FilePreviewImageView.swift in Sources */,
 				DA872B152BDDEE1A008B1012 /* VisualEffectView.swift in Sources */,
-				DA3429AE2EB9C0280010784E /* HotlineFileUploadClientNew.swift in Sources */,
+				DA3429AE2EB9C0280010784E /* HotlineFileUploadClient.swift in Sources */,
 				DAAEE66D2B475F1400A5BA07 /* PreviewFileInfo.swift in Sources */,
 				DAB4D8842B4CABEF0048A05C /* Extensions.swift in Sources */,
 				DA0D698D2B1E7CF700C71DF5 /* UsersView.swift in Sources */,
@@ -723,7 +723,7 @@
 				DAB4D87E2B4C8BCA0048A05C /* FilePreviewTextView.swift in Sources */,
 				DA3429B72EBAB1750010784E /* QuickLookPreviewView.swift in Sources */,
 				DA4F2C012B1A558E00D8ADDC /* ChatView.swift in Sources */,
-				DA5268B32EB6806E00DCB941 /* HotlineFileDownloadClientNew.swift in Sources */,
+				DA5268B32EB6806E00DCB941 /* HotlineFileDownloadClient.swift in Sources */,
 				DACCE5E32EABE86A008CDD92 /* AppUpdateView.swift in Sources */,
 				DAC6B2E02EAC6236004E2CBA /* ChatStore.swift in Sources */,
 				DA32CD492B2931640053B98B /* User.swift in Sources */,

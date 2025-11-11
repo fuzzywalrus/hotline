@@ -1,8 +1,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-// MARK: - Preview Type
-
 enum FilePreviewType: Equatable {
   case unknown
   case image
@@ -13,12 +11,14 @@ enum FilePreviewType: Equatable {
 @MainActor
 @Observable
 final class FilePreviewState {
-  // MARK: - Properties
-
+  enum LoadState: Equatable {
+    case unloaded
+    case loading
+    case loaded
+    case failed
+  }
+  
   let info: PreviewFileInfo
-
-  private var previewClient: HotlineFilePreviewClient?
-  private var previewTask: Task<Void, Never>?
 
   var state: LoadState = .unloaded
   var progress: Double = 0.0
@@ -33,39 +33,35 @@ final class FilePreviewState {
 
   var text: String? = nil
   var styledText: NSAttributedString? = nil
-
-  // MARK: - Computed Properties
+  
+  @ObservationIgnored private var previewClient: HotlineFilePreviewClient?
+  @ObservationIgnored private var previewTask: Task<Void, Never>?
 
   var previewType: FilePreviewType {
-    info.previewType
+    self.info.previewType
   }
-
-  // MARK: - Initialization
 
   init(info: PreviewFileInfo) {
     self.info = info
   }
 
-  nonisolated deinit {
-    // Note: Can't access @MainActor properties from deinit
-    // Cleanup will happen when previewClient is deallocated
-  }
-
-  // MARK: - Public API
+  // MARK: - API
 
   func download() {
     // Cancel any existing download
-    previewTask?.cancel()
-    previewClient?.cleanup()
+    self.previewTask?.cancel()
+    self.previewClient?.cleanup()
 
     let task = Task { @MainActor in
       do {
         let client = HotlineFilePreviewClient(
-          fileName: info.name,
-          address: info.address,
-          port: UInt16(info.port),
-          reference: info.id,
-          size: UInt32(info.size)
+          fileName: self.info.name,
+          address: self.info.address,
+          port: UInt16(self.info.port),
+          reference: self.info.id,
+          size: UInt32(self.info.size),
+          fileType: self.info.type,
+          fileCreator: self.info.creator
         )
         self.previewClient = client
 
@@ -132,69 +128,58 @@ final class FilePreviewState {
   }
 
   func cancel() {
-    previewTask?.cancel()
-    previewTask = nil
-    previewClient?.cancel()
+    self.previewTask?.cancel()
+    self.previewTask = nil
+    self.previewClient?.cancel()
   }
 
   func cleanup() {
-    previewClient?.cleanup()
-    previewClient = nil
-    fileURL = nil
-    image = nil
-    text = nil
-    styledText = nil
+    self.previewClient?.cleanup()
+    self.previewClient = nil
+    self.fileURL = nil
+    self.image = nil
+    self.text = nil
+    self.styledText = nil
   }
 
-  // MARK: - Private Implementation
+  // MARK: - Utility
 
-  private func loadPreview(from url: URL) {
-    guard let data = try? Data(contentsOf: url) else {
-      self.state = .failed
-      print("FilePreviewState: Failed to read preview data from \(url.path)")
-      return
-    }
-
-    switch self.previewType {
-    case .image:
-      #if os(iOS)
-      self.image = UIImage(data: data)
-      #elseif os(macOS)
-      self.image = NSImage(data: data)
-      #endif
-
-      if self.image == nil {
-        self.state = .failed
-        print("FilePreviewState: Failed to create image from data")
-      }
-
-    case .text:
-      let encoding: UInt = NSString.stringEncoding(for: data, convertedString: nil, usedLossyConversion: nil)
-      if encoding != 0 {
-        self.text = String(data: data, encoding: String.Encoding(rawValue: encoding))
-      } else {
-        self.text = String(data: data, encoding: .utf8)
-      }
-
-      if self.text == nil {
-        self.state = .failed
-        print("FilePreviewState: Failed to decode text data")
-      }
-
-    case .unknown:
-      print("FilePreviewState: Unknown preview type for \(info.name)")
-      break
-    }
-  }
-}
-
-// MARK: - Load State
-
-extension FilePreviewState {
-  enum LoadState: Equatable {
-    case unloaded
-    case loading
-    case loaded
-    case failed
-  }
+//  private func loadPreview(from url: URL) {
+//    guard let data = try? Data(contentsOf: url) else {
+//      self.state = .failed
+//      print("FilePreviewState: Failed to read preview data from \(url.path)")
+//      return
+//    }
+//
+//    switch self.previewType {
+//    case .image:
+//      #if os(iOS)
+//      self.image = UIImage(data: data)
+//      #elseif os(macOS)
+//      self.image = NSImage(data: data)
+//      #endif
+//
+//      if self.image == nil {
+//        self.state = .failed
+//        print("FilePreviewState: Failed to create image from data")
+//      }
+//
+//    case .text:
+//      let encoding: UInt = NSString.stringEncoding(for: data, convertedString: nil, usedLossyConversion: nil)
+//      if encoding != 0 {
+//        self.text = String(data: data, encoding: String.Encoding(rawValue: encoding))
+//      } else {
+//        self.text = String(data: data, encoding: .utf8)
+//      }
+//
+//      if self.text == nil {
+//        self.state = .failed
+//        print("FilePreviewState: Failed to decode text data")
+//      }
+//
+//    case .unknown:
+//      print("FilePreviewState: Unknown preview type for \(info.name)")
+//      break
+//    }
+//  }
 }

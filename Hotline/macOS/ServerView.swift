@@ -93,7 +93,7 @@ struct ServerView: View {
     ServerMenuItem(type: .board, name: "Board", image: "Section Board"),
     ServerMenuItem(type: .news, name: "News", image: "Section News"),
     ServerMenuItem(type: .files, name: "Files", image: "Section Files"),
-    ServerMenuItem(type: .accounts, name: "Admin", image: "Section Users"),
+    ServerMenuItem(type: .accounts, name: "Accounts", image: "Section Users"),
   ]
   
   static var classicMenuItems: [ServerMenuItem] = [
@@ -280,47 +280,43 @@ struct ServerView: View {
   }
   
   var transfersSection: some View {
-//    Section("Transfers") {
-      ForEach(model.transfers) { transfer in
-        TransferItemView(transfer: transfer)
-      }
-//    }
+    ForEach(model.transfers) { transfer in
+      TransferItemView(transfer: transfer)
+    }
   }
   
   var usersSection: some View {
-//    Section("\(model.users.count) Online") {
-      ForEach(model.users) { user in
-        HStack(spacing: 5) {
-          if let iconImage = HotlineState.getClassicIcon(Int(user.iconID)) {
-            Image(nsImage: iconImage)
-              .frame(width: 16, height: 16)
-              .padding(.leading, 2)
-              .padding(.trailing, 2)
-          }
-          else {
-            Image("User")
-              .frame(width: 16, height: 16)
-              .padding(.leading, 2)
-              .padding(.trailing, 2)
-          }
-          
-          Text(user.name)
-            .foregroundStyle(user.isAdmin ? Color.hotlineRed : .primary)
-          
-          Spacer()
-          
-          if model.hasUnreadInstantMessages(userID: user.id) {
-            Circle()
-              .frame(width: 6, height: 6)
-              .foregroundStyle(user.isAdmin ? Color.hotlineRed : .primary.opacity(0.5))
-              .padding(EdgeInsets(top: 0, leading: 8, bottom: 0, trailing: 2))
-          }
+    ForEach(model.users) { user in
+      HStack(spacing: 5) {
+        if let iconImage = HotlineState.getClassicIcon(Int(user.iconID)) {
+          Image(nsImage: iconImage)
+            .frame(width: 16, height: 16)
+            .padding(.leading, 2)
+            .padding(.trailing, 2)
         }
-        .opacity(user.isIdle ? 0.5 : 1.0)
-        .opacity(controlActiveState == .inactive ? 0.5 : 1.0)
-        .tag(ServerNavigationType.user(userID: user.id))
+        else {
+          Image("User")
+            .frame(width: 16, height: 16)
+            .padding(.leading, 2)
+            .padding(.trailing, 2)
+        }
+        
+        Text(user.name)
+          .foregroundStyle(user.isAdmin ? Color.hotlineRed : .primary)
+        
+        Spacer()
+        
+        if model.hasUnreadInstantMessages(userID: user.id) {
+          Circle()
+            .frame(width: 6, height: 6)
+            .foregroundStyle(user.isAdmin ? Color.hotlineRed : .primary.opacity(0.5))
+            .padding(EdgeInsets(top: 0, leading: 8, bottom: 0, trailing: 2))
+        }
       }
-//    }
+      .opacity(user.isIdle ? 0.5 : 1.0)
+      .opacity(controlActiveState == .inactive ? 0.5 : 1.0)
+      .tag(ServerNavigationType.user(userID: user.id))
+    }
   }
   
   var serverView: some View {
@@ -353,7 +349,7 @@ struct ServerView: View {
         case .accounts:
             AccountManagerView()
               .navigationTitle(model.serverTitle)
-              .navigationSubtitle("Administration")
+              .navigationSubtitle("Accounts")
               .navigationSplitViewColumnWidth(min: 250, ideal: 500)
         case .user(let userID):
           let user = model.users.first(where: { $0.id == userID })

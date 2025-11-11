@@ -8,23 +8,29 @@ public class HotlineFilePreviewClient {
   private let referenceNumber: UInt32
   private let fileName: String
   private let transferSize: UInt32
+  private let fileType: String?
+  private let fileCreator: String?
 
   private var downloadClient: HotlineFileDownloadClient?
   private var previewTask: Task<URL, Error>?
   private var temporaryFileURL: URL?
-
+  
   public init(
     fileName: String,
     address: String,
     port: UInt16,
     reference: UInt32,
-    size: UInt32
+    size: UInt32,
+    fileType: String? = nil,
+    fileCreator: String? = nil
   ) {
     self.fileName = fileName
     self.serverAddress = address
     self.serverPort = port
     self.referenceNumber = reference
     self.transferSize = size
+    self.fileType = fileType
+    self.fileCreator = fileCreator
   }
 
   // MARK: - API
@@ -105,13 +111,23 @@ public class HotlineFilePreviewClient {
     progressHandler?(.connected)
 
     // Stream raw data directly to temp file with progress tracking
-    print("HotlineFilePreviewClient[\(self.referenceNumber)]: Streaming \(transferSize) bytes to temp file")
+    print("HotlineFilePreviewClient[\(self.referenceNumber)]: Streaming \(self.transferSize) bytes to temp file")
 
-    let totalSize = Int(transferSize)
+    let totalSize = Int(self.transferSize)
 
-    // Create empty file
-    FileManager.default.createFile(atPath: tempFileURL.path(percentEncoded: false), contents: nil)
-
+    // Create empty file (with HFS attributes if available)
+    var attributes: [FileAttributeKey: Any] = [:]
+    if let creator = self.fileCreator, !creator.isBlank {
+      attributes[.hfsCreatorCode] = creator.fourCharCode() as NSNumber
+    }
+    if let type = self.fileType, !type.isBlank {
+      attributes[.hfsTypeCode] = type.fourCharCode() as NSNumber
+    }
+ 
+    guard FileManager.default.createFile(atPath: tempFileURL.path, contents: nil, attributes: attributes) else {
+      throw HotlineTransferClientError.failedToTransfer
+    }
+    
     let fileHandle = try FileHandle(forWritingTo: tempFileURL)
     defer { try? fileHandle.close() }
 

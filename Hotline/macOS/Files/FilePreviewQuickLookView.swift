@@ -11,16 +11,16 @@ struct FilePreviewQuickLookView: View {
   @Environment(\.dismiss) private var dismiss
 
   @Binding var info: PreviewFileInfo?
-  @State var preview: FilePreviewState? = nil
+  @State private var preview: FilePreviewState? = nil
   
   @FocusState private var focusField: FilePreviewFocus?
 
   var body: some View {
     Group {
-      if preview?.state != .loaded {
+      if self.preview?.state != .loaded {
         VStack(alignment: .center, spacing: 0) {
           Spacer()
-          ProgressView(value: max(0.0, min(1.0, preview?.progress ?? 0.0)))
+          ProgressView(value: max(0.0, min(1.0, self.preview?.progress ?? 0.0)))
             .focusable(false)
             .progressViewStyle(.circular)
             .controlSize(.extraLarge)
@@ -33,7 +33,7 @@ struct FilePreviewQuickLookView: View {
         .padding()
       }
       else {
-        if let fileURL = preview?.fileURL {
+        if let fileURL = self.preview?.fileURL {
           QuickLookPreviewView(fileURL: fileURL)
             .frame(minWidth: 400, maxWidth: .infinity, minHeight: 400, maxHeight: .infinity)
         }
@@ -68,25 +68,15 @@ struct FilePreviewQuickLookView: View {
     .focusable()
     .focusEffectDisabled()
     .background(Color(nsColor: .textBackgroundColor))
-    .focused($focusField, equals: .window)
-    .navigationTitle(info?.name ?? "File Preview")
-    .background {
-      if let fileURL = self.preview?.fileURL {
-        WindowConfigurator { window in
-          window.representedURL = fileURL
-          window.standardWindowButton(.documentIconButton)?.isHidden = false
-        }
-      }
-    }
+    .focused(self.$focusField, equals: .window)
+    .navigationTitle(self.info?.name ?? "File Preview")
+    .applyNavigationDocumentIfPresent(self.preview?.fileURL)
     .toolbar {
-      if let _ = preview?.fileURL {
+      if let fileURL = self.preview?.fileURL {
         if let info = info {
           ToolbarItem(placement: .primaryAction) {
             Button {
-              if let fileURL = preview?.fileURL,
-                 let data = try? Data(contentsOf: fileURL) {
-                let _ = data.saveAsFileToDownloads(filename: info.name)
-              }
+              FileManager.default.copyToDownloads(from: fileURL, using: info.name, bounceDock: true)
             } label: {
               Label("Download File...", systemImage: "arrow.down")
             }
@@ -96,28 +86,27 @@ struct FilePreviewQuickLookView: View {
       }
     }
     .task {
-      if let info = info {
-        preview = FilePreviewState(info: info)
-        preview?.download()
+      if let info = self.info {
+        self.preview = FilePreviewState(info: info)
+        self.preview?.download()
       }
     }
     .onAppear {
-      if info == nil {
-        Task {
-          dismiss()
-        }
+      guard self.info != nil else {
+        self.dismiss()
         return
       }
 
-      focusField = .window
+      self.focusField = .window
     }
     .onDisappear {
-      preview?.cancel()
-      dismiss()
+      self.preview?.cancel()
+      self.preview?.cleanup()
+      self.dismiss()
     }
-    .onChange(of: preview?.state) {
-      if preview?.state == .failed {
-        dismiss()
+    .onChange(of: self.preview?.state) {
+      if self.preview?.state == .failed {
+        self.dismiss()
       }
     }
     .preferredColorScheme(.dark)
