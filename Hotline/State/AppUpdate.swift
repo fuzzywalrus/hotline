@@ -35,8 +35,6 @@ final class AppUpdate {
     case manual
   }
   
-  // MARK: - Public State
-  
   var isChecking = false
   var isDownloading = false
   var showWindow = false
@@ -55,7 +53,7 @@ final class AppUpdate {
   private let remindDateKey = "update.remind.date"
   private let lastPromptedVersionKey = "update.last.prompt.version"
   
-  // MARK: - Public API
+  // MARK: - API
   
   func checkForUpdatesOnLaunch() async {
     await checkForUpdates(trigger: .automatic)
@@ -100,7 +98,7 @@ final class AppUpdate {
     resetAndCloseWindow()
   }
   
-  // MARK: - Internal Logic
+  // MARK: - Implementation
   
   private func checkForUpdates(trigger: CheckTrigger) async {
     await MainActor.run {
@@ -259,8 +257,7 @@ final class AppUpdate {
   private func downloadRelease(_ release: UpdateReleaseInfo) async {
     do {
       let (temporaryURL, _) = try await URLSession.shared.download(from: release.downloadURL)
-      let downloadsDirectory = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first!
-      let destinationURL = downloadsDirectory.appendingPathComponent(release.assetName)
+      let destinationURL = URL.downloadsDirectory.appendingPathComponent(release.assetName)
       
       if FileManager.default.fileExists(atPath: destinationURL.path) {
         try? FileManager.default.removeItem(at: destinationURL)

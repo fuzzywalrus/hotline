@@ -19,9 +19,7 @@ struct TransfersView: View {
       ToolbarItem(placement: .primaryAction) {
         Button {
           if self.selectedTransfers.isEmpty {
-            if let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first {
-              NSWorkspace.shared.open(downloadsURL)
-            }
+            NSWorkspace.shared.open(URL.downloadsDirectory)
           }
           else {
             let fileURLs = self.selectedTransfers.compactMap(\.fileURL)

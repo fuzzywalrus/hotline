@@ -16,15 +16,11 @@ private struct FolderItem {
 }
 
 @MainActor
-public class HotlineFolderUploadClientNew: @MainActor HotlineTransferClient {
-  // MARK: - Configuration
-
+public class HotlineFolderUploadClient: @MainActor HotlineTransferClient {
   public struct Configuration: Sendable {
     public var chunkSize: Int = 256 * 1024
     public init() {}
   }
-
-  // MARK: - Properties
 
   private let serverAddress: String
   private let serverPort: UInt16
@@ -40,8 +36,6 @@ public class HotlineFolderUploadClientNew: @MainActor HotlineTransferClient {
 
   private var socket: NetSocket?
   private var uploadTask: Task<Void, Error>?
-
-  // MARK: - Initialization
 
   public init?(
     folderURL: URL,
@@ -108,7 +102,7 @@ public class HotlineFolderUploadClientNew: @MainActor HotlineTransferClient {
     }
   }
 
-  // MARK: -
+  // MARK: - Implementation
 
   private enum UploadStage {
     case waitingForNextFile      // Waiting for server to send .nextFile action

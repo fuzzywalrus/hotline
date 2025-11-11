@@ -7,6 +7,9 @@ struct PreviewFileInfo: Identifiable, Codable {
   var size: Int
   var name: String
   
+  var type: String? = nil
+  var creator: String? = nil
+  
   var previewType: FilePreviewType {
     let fileExtension = (self.name as NSString).pathExtension
     if let fileType = UTType(filenameExtension: fileExtension) {

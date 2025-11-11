@@ -252,7 +252,7 @@ class HotlineState: Equatable {
 
   // MARK: - Private State
 
-  @ObservationIgnored private var client: HotlineClientNew?
+  @ObservationIgnored private var client: HotlineClient?
   @ObservationIgnored private var eventTask: Task<Void, Never>?
   @ObservationIgnored private var chatSessionKey: ChatStore.SessionKey?
   @ObservationIgnored private var restoredChatSessionKey: ChatStore.SessionKey?
@@ -308,13 +308,13 @@ class HotlineState: Equatable {
         iconID: UInt16(iconID)
       )
 
-      print("HotlineState.login(): Calling HotlineClientNew.connect()...")
-      let client = try await HotlineClientNew.connect(
+      print("HotlineState.login(): Calling HotlineClient.connect()...")
+      let client = try await HotlineClient.connect(
         host: server.address,
         port: UInt16(server.port),
         login: loginInfo
       )
-      print("HotlineState.login(): HotlineClientNew.connect() returned")
+      print("HotlineState.login(): HotlineClient.connect() returned")
 
       self.client = client
       print("HotlineState.login(): Client stored")
@@ -865,7 +865,7 @@ class HotlineState: Equatable {
   ///   - progressCallback: Optional callback for progress updates (receives TransferInfo and progress 0.0-1.0)
   ///   - callback: Optional completion callback (receives TransferInfo and final file URL)
   @MainActor
-  func downloadFileNew(_ fileName: String, path: [String], to destination: URL? = nil, progress progressCallback: ((TransferInfo) -> Void)? = nil, complete callback: ((TransferInfo) -> Void)? = nil) {
+  func downloadFile(_ fileName: String, path: [String], to destination: URL? = nil, progress progressCallback: ((TransferInfo) -> Void)? = nil, complete callback: ((TransferInfo) -> Void)? = nil) {
     guard let client = self.client else { return }
 
     var fullPath: [String] = []
@@ -975,7 +975,7 @@ class HotlineState: Equatable {
   ///   - itemProgressCallback: Optional callback for per-item updates (receives TransferInfo with current file info)
   ///   - callback: Optional completion callback (receives TransferInfo and final folder URL)
   @MainActor
-  func downloadFolderNew(
+  func downloadFolder(
     _ folderName: String,
     path: [String],
     to destination: URL? = nil,
@@ -1018,7 +1018,7 @@ class HotlineState: Equatable {
       AppState.shared.addTransfer(transfer)
 
       // Create download client
-      let downloadClient = HotlineFolderDownloadClientNew(
+      let downloadClient = HotlineFolderDownloadClient(
         address: address,
         port: UInt16(port),
         reference: referenceNumber,
@@ -1091,7 +1091,7 @@ class HotlineState: Equatable {
     }
   }
 
-  /// Modern async/await folder upload using HotlineFolderUploadClientNew
+  /// Upload a folder to the server.
   ///
   /// - Parameters:
   ///   - folderURL: URL to the folder on disk to upload
@@ -1155,7 +1155,7 @@ class HotlineState: Equatable {
       print("HotlineState: Got folder upload reference: \(referenceNumber)")
 
       // Create upload client
-      guard let uploadClient = HotlineFolderUploadClientNew(
+      guard let uploadClient = HotlineFolderUploadClient(
         folderURL: folderURL,
         address: address,
         port: UInt16(port),
@@ -1346,9 +1346,9 @@ class HotlineState: Equatable {
   }
 
   func setFileInfo(fileName: String, path filePath: [String], fileNewName: String?, comment: String?, encoding: String.Encoding = .utf8) {
-    // TODO: Implement setFileInfo in HotlineClientNew
+    // TODO: Implement setFileInfo in HotlineClient
     // This method updates file metadata (name and/or comment)
-    print("setFileInfo not yet implemented in HotlineState/HotlineClientNew")
+    print("setFileInfo not yet implemented in HotlineState/HotlineClient")
   }
 
   @MainActor
