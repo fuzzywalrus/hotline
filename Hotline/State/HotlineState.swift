@@ -799,7 +799,7 @@ class HotlineState: Equatable {
     self.users = hotlineUsers.map { User(hotlineUser: $0) }
   }
 
-  // MARK: - Files (Basic)
+  // MARK: - Files
   
   @MainActor
   @discardableResult
@@ -856,7 +856,7 @@ class HotlineState: Equatable {
   }
 
   @MainActor
-  func deleteFile(_ fileName: String, path: [String]) async throws -> Bool {
+  func deleteFile(_ fileName: String, path: [String]) async throws {
     guard let client = self.client else {
       throw HotlineClientError.notConnected
     }
@@ -865,14 +865,16 @@ class HotlineState: Equatable {
     if path.count > 1 {
       fullPath = Array(path[0..<path.count-1])
     }
-
-    let success = try await client.deleteFile(name: fileName, path: fullPath)
-
-    if success {
+    
+    do {
+      try await client.deleteFile(name: fileName, path: fullPath)
       self.invalidateFileListCache(for: fullPath, includingAncestors: true)
     }
-
-    return success
+    catch let error as HotlineClientError {
+      self.errorMessage = error.userMessage
+      self.errorDisplayed = true
+      return
+    }
   }
 
   /// Download a file from the server.
@@ -1280,9 +1282,21 @@ class HotlineState: Equatable {
 
     Task { @MainActor [weak self] in
       guard let self else { return }
+      
+      let referenceNumber: UInt32?
+      
+      do {
+        referenceNumber = try await client.uploadFile(name: fileName, path: path)
+      }
+      catch let error as HotlineClientError {
+        self.errorMessage = error.userMessage
+        self.errorDisplayed = true
+        return
+      }
+      
 
       // Request upload from server
-      guard let referenceNumber = try? await client.uploadFile(name: fileName, path: path),
+      guard let referenceNumber,
             let server = self.server,
             let address = server.address as String?,
             let port = server.port as Int?

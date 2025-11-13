@@ -196,8 +196,13 @@ struct ServerView: View {
     .onChange(of: self.model.serverTitle) {
       self.state.serverName = self.model.serverTitle
     }
-    .alert(self.model.errorMessage ?? "Server Error", isPresented: self.$model.errorDisplayed) {
+    .alert("Something Went Wrong", isPresented: self.$model.errorDisplayed) {
       Button("OK") {}
+    } message: {
+      if let message = self.model.errorMessage,
+         !message.isBlank {
+        Text(message)
+      }
     }
     .onAppear {
       var address = self.server.address

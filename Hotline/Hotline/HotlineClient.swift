@@ -429,6 +429,7 @@ public actor HotlineClient {
     } catch is TaskTimeoutError {
       throw HotlineClientError.timeout
     } catch let error as HotlineClientError {
+      print("Hotline Client Error: \(error)")
       throw error
     } catch {
       throw error
@@ -651,17 +652,12 @@ public actor HotlineClient {
   ///   - name: File or folder name
   ///   - path: Directory path containing the item
   /// - Returns: True if deletion succeeded
-  public func deleteFile(name: String, path: [String]) async throws -> Bool {
+  public func deleteFile(name: String, path: [String]) async throws {
     var transaction = HotlineTransaction(id: self.generateTransactionID(), type: .deleteFile)
     transaction.setFieldString(type: .fileName, val: name)
     transaction.setFieldPath(type: .filePath, val: path)
 
-    do {
-      try await self.sendTransaction(transaction)
-      return true
-    } catch {
-      return false
-    }
+    try await self.sendTransaction(transaction)
   }
   
   /// Create a folder

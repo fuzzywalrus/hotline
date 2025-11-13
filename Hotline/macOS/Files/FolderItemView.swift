@@ -17,7 +17,7 @@ struct FolderItemView: View {
     
     print("UPLOADING TO PATH: ", filePath)
     
-    model.uploadFile(url: fileURL, path: filePath) { info in
+    self.model.uploadFile(url: fileURL, path: filePath) { info in
       Task {
         // Refresh file listing to display newly uploaded file.
         let _ = try? await model.getFileList(path: filePath)
@@ -118,7 +118,7 @@ struct FolderItemView: View {
         DispatchQueue.main.async {
           if let urlData = urlData as? Data,
              let fileURL = URL(dataRepresentation: urlData, relativeTo: nil, isAbsolute: true) {
-            uploadFile(file: fileURL)
+            self.uploadFile(file: fileURL)
           }
         }
       }

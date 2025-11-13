@@ -448,14 +448,14 @@ struct FilesView: View {
   
   @MainActor private func downloadFile(_ file: FileInfo) {
     if file.isFolder {
-      model.downloadFolder(file.name, path: file.path)
+      self.model.downloadFolder(file.name, path: file.path)
     }
     else {
-      model.downloadFile(file.name, path: file.path)
+      self.model.downloadFile(file.name, path: file.path)
     }
   }
   
-  @MainActor private func uploadFile(file fileURL: URL, to path: [String]) {
+  @MainActor private func uploadFile(file fileURL: URL, to path: [String]) throws {
     self.model.uploadFile(url: fileURL, path: path) { info in
       Task {
         // Refresh file listing to display newly uploaded file.
@@ -508,9 +508,13 @@ struct FilesView: View {
     if file.path.count > 1 {
       parentPath = Array(file.path[0..<file.path.count-1])
     }
-
-    if (try? await model.deleteFile(file.name, path: file.path)) == true {
-      let _ = try? await model.getFileList(path: parentPath)
+    
+    do {
+      try await self.model.deleteFile(file.name, path: file.path)
+      try await self.model.getFileList(path: parentPath)
+    }
+    catch {
+      print("Error deleting file: \(error)")
     }
   }
 }
