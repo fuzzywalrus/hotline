@@ -184,6 +184,7 @@ class HotlineState: Equatable {
   var users: [User] = []
 
   // Chat
+  var broadcastMessage: String = ""
   var chat: [ChatMessage] = []
   var chatInput: String = ""
   var unreadPublicChat: Bool = false
@@ -613,6 +614,15 @@ class HotlineState: Equatable {
   }
 
   // MARK: - Chat
+  
+  @MainActor
+  func sendBroadcast(_ message: String) async throws {
+    guard let client = self.client else {
+      throw HotlineClientError.notConnected
+    }
+    
+    try await client.sendBroadcast(message)
+  }
 
   @MainActor
   func sendChat(_ text: String, announce: Bool = false) async throws {

@@ -89,6 +89,7 @@
 		DAB4D8842B4CABEF0048A05C /* Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAB4D8832B4CABEF0048A05C /* Extensions.swift */; };
 		DAB4D8872B4CB3610048A05C /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = DAB4D8862B4CB3610048A05C /* MarkdownUI */; };
 		DABAFBEA2EC58C170015E889 /* AccountDetailsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DABAFBE92EC58C170015E889 /* AccountDetailsView.swift */; };
+		DABAFBEC2EC599700015E889 /* BroadcastMessageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DABAFBEB2EC5996B0015E889 /* BroadcastMessageView.swift */; };
 		DABE8BF42B55DC0A00884D28 /* transfer-complete.aiff in Resources */ = {isa = PBXBuildFile; fileRef = DABE8BF32B55DC0A00884D28 /* transfer-complete.aiff */; };
 		DABE8BF62B55DC2E00884D28 /* chat-message.aiff in Resources */ = {isa = PBXBuildFile; fileRef = DABE8BF52B55DC2E00884D28 /* chat-message.aiff */; };
 		DABE8BF82B55DC6100884D28 /* logged-in.aiff in Resources */ = {isa = PBXBuildFile; fileRef = DABE8BF72B55DC6100884D28 /* logged-in.aiff */; };
@@ -203,6 +204,7 @@
 		DAB4D8812B4C8FED0048A05C /* FileIconView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileIconView.swift; sourceTree = "<group>"; };
 		DAB4D8832B4CABEF0048A05C /* Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Extensions.swift; sourceTree = "<group>"; };
 		DABAFBE92EC58C170015E889 /* AccountDetailsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountDetailsView.swift; sourceTree = "<group>"; };
+		DABAFBEB2EC5996B0015E889 /* BroadcastMessageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BroadcastMessageView.swift; sourceTree = "<group>"; };
 		DABE8BF32B55DC0A00884D28 /* transfer-complete.aiff */ = {isa = PBXFileReference; lastKnownFileType = audio.aiff; path = "transfer-complete.aiff"; sourceTree = "<group>"; };
 		DABE8BF52B55DC2E00884D28 /* chat-message.aiff */ = {isa = PBXFileReference; lastKnownFileType = audio.aiff; path = "chat-message.aiff"; sourceTree = "<group>"; };
 		DABE8BF72B55DC6100884D28 /* logged-in.aiff */ = {isa = PBXFileReference; lastKnownFileType = audio.aiff; path = "logged-in.aiff"; sourceTree = "<group>"; };
@@ -530,6 +532,7 @@
 		DAE734F72B2E4126000C56F6 /* macOS */ = {
 			isa = PBXGroup;
 			children = (
+				DABAFBEB2EC5996B0015E889 /* BroadcastMessageView.swift */,
 				DA55AC762BE589F700034857 /* AboutView.swift */,
 				DACCE5E22EABE86A008CDD92 /* AppUpdateView.swift */,
 				DAE136B92B9D1147007D8307 /* HotlinePanelView.swift */,
@@ -730,6 +733,7 @@
 				DA501BE72EBE9542001714F8 /* TrackerBookmarkSheet.swift in Sources */,
 				DAB4D87E2B4C8BCA0048A05C /* FilePreviewTextView.swift in Sources */,
 				DA3429B72EBAB1750010784E /* QuickLookPreviewView.swift in Sources */,
+				DABAFBEC2EC599700015E889 /* BroadcastMessageView.swift in Sources */,
 				DA4F2C012B1A558E00D8ADDC /* ChatView.swift in Sources */,
 				DA5268B32EB6806E00DCB941 /* HotlineFileDownloadClient.swift in Sources */,
 				DACCE5E32EABE86A008CDD92 /* AppUpdateView.swift in Sources */,
