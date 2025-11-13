@@ -532,7 +532,6 @@
 		DAE734F72B2E4126000C56F6 /* macOS */ = {
 			isa = PBXGroup;
 			children = (
-				DABAFBEB2EC5996B0015E889 /* BroadcastMessageView.swift */,
 				DA55AC762BE589F700034857 /* AboutView.swift */,
 				DACCE5E22EABE86A008CDD92 /* AppUpdateView.swift */,
 				DAE136B92B9D1147007D8307 /* HotlinePanelView.swift */,
@@ -540,6 +539,7 @@
 				DAF5BC6B2EC2727100551E4D /* ConnectView.swift */,
 				DAE735022B30C0BB000C56F6 /* MessageView.swift */,
 				DA5268B42EB6840A00DCB941 /* TransfersView.swift */,
+				DABAFBEB2EC5996B0015E889 /* BroadcastMessageView.swift */,
 				DA501BE52EBE9520001714F8 /* Trackers */,
 				DA5268A82EB081AF00DCB941 /* Chat */,
 				DA5268A62EB0762300DCB941 /* Board */,
