@@ -88,6 +88,7 @@
 		DAB4D8822B4C8FED0048A05C /* FileIconView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAB4D8812B4C8FED0048A05C /* FileIconView.swift */; };
 		DAB4D8842B4CABEF0048A05C /* Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAB4D8832B4CABEF0048A05C /* Extensions.swift */; };
 		DAB4D8872B4CB3610048A05C /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = DAB4D8862B4CB3610048A05C /* MarkdownUI */; };
+		DABAFBEA2EC58C170015E889 /* AccountDetailsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DABAFBE92EC58C170015E889 /* AccountDetailsView.swift */; };
 		DABE8BF42B55DC0A00884D28 /* transfer-complete.aiff in Resources */ = {isa = PBXBuildFile; fileRef = DABE8BF32B55DC0A00884D28 /* transfer-complete.aiff */; };
 		DABE8BF62B55DC2E00884D28 /* chat-message.aiff in Resources */ = {isa = PBXBuildFile; fileRef = DABE8BF52B55DC2E00884D28 /* chat-message.aiff */; };
 		DABE8BF82B55DC6100884D28 /* logged-in.aiff in Resources */ = {isa = PBXBuildFile; fileRef = DABE8BF72B55DC6100884D28 /* logged-in.aiff */; };
@@ -201,6 +202,7 @@
 		DAB4D87D2B4C8BCA0048A05C /* FilePreviewTextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilePreviewTextView.swift; sourceTree = "<group>"; };
 		DAB4D8812B4C8FED0048A05C /* FileIconView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileIconView.swift; sourceTree = "<group>"; };
 		DAB4D8832B4CABEF0048A05C /* Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Extensions.swift; sourceTree = "<group>"; };
+		DABAFBE92EC58C170015E889 /* AccountDetailsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountDetailsView.swift; sourceTree = "<group>"; };
 		DABE8BF32B55DC0A00884D28 /* transfer-complete.aiff */ = {isa = PBXFileReference; lastKnownFileType = audio.aiff; path = "transfer-complete.aiff"; sourceTree = "<group>"; };
 		DABE8BF52B55DC2E00884D28 /* chat-message.aiff */ = {isa = PBXFileReference; lastKnownFileType = audio.aiff; path = "chat-message.aiff"; sourceTree = "<group>"; };
 		DABE8BF72B55DC6100884D28 /* logged-in.aiff */ = {isa = PBXFileReference; lastKnownFileType = audio.aiff; path = "logged-in.aiff"; sourceTree = "<group>"; };
@@ -363,6 +365,7 @@
 			isa = PBXGroup;
 			children = (
 				11F8288A2BF9428100216BA0 /* AccountManagerView.swift */,
+				DABAFBE92EC58C170015E889 /* AccountDetailsView.swift */,
 			);
 			path = Accounts;
 			sourceTree = "<group>";
@@ -579,7 +582,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 1500;
-				LastUpgradeCheck = 1500;
+				LastUpgradeCheck = 2600;
 				TargetAttributes = {
 					DA9CAFB62B126D5700CDA197 = {
 						CreatedOnToolsVersion = 15.0.1;
@@ -642,6 +645,7 @@
 				DA52689E2EB073A400DCB941 /* IconSettingsView.swift in Sources */,
 				DAC3D9832BC33FD000A727C9 /* AppState.swift in Sources */,
 				DA65499C2BEC3FBD00EDB697 /* ServerAgreementView.swift in Sources */,
+				DABAFBEA2EC58C170015E889 /* AccountDetailsView.swift in Sources */,
 				DA5268BC2EB95A7700DCB941 /* HotlineFolderDownloadClient.swift in Sources */,
 				DA2863DD2B3E8B7000A7D050 /* FilePreview.swift in Sources */,
 				DA3429B02EBA70790010784E /* HotlineFolderUploadClient.swift in Sources */,
@@ -772,6 +776,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 5AEEV7QB2U;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -795,6 +800,7 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
@@ -835,6 +841,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 5AEEV7QB2U;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -851,6 +858,7 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				VALIDATE_PRODUCT = YES;
 			};
@@ -866,9 +874,12 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 24;
 				DEVELOPMENT_ASSET_PATHS = "\"Hotline/Preview Content\"";
-				DEVELOPMENT_TEAM = 5AEEV7QB2U;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_FILE_ACCESS_DOWNLOADS_FOLDER = readwrite;
 				"ENABLE_HARDENED_RUNTIME[sdk=macosx*]" = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Hotline/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Hotline;
@@ -903,9 +914,12 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 24;
 				DEVELOPMENT_ASSET_PATHS = "\"Hotline/Preview Content\"";
-				DEVELOPMENT_TEAM = 5AEEV7QB2U;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_FILE_ACCESS_DOWNLOADS_FOLDER = readwrite;
 				"ENABLE_HARDENED_RUNTIME[sdk=macosx*]" = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Hotline/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Hotline;
