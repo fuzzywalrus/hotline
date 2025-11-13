@@ -6,6 +6,7 @@ class ServerState: Equatable {
   var selection: ServerNavigationType
   var serverName: String? = nil
   var accountsShown: Bool = false
+  var broadcastShown: Bool = false
 //  var serverBanner: NSImage? = nil
 //  var bannerBackgroundColor: Color? = nil
 

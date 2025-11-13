@@ -489,6 +489,17 @@ public actor HotlineClient {
   }
 
   // MARK: - Chat
+  
+  /// Broadcast a message to the server
+  ///
+  /// - Parameters:
+  ///   - message: Text to send
+  ///   - encoding: Text encoding (default: UTF-8)
+  public func sendBroadcast(_ message: String, encoding: String.Encoding = .utf8, announce: Bool = false) async throws {
+    var transaction = HotlineTransaction(id: self.generateTransactionID(), type: .userBroadcast)
+    transaction.setFieldString(type: .data, val: message, encoding: encoding)
+    try await socket.send(transaction, endian: .big)
+  }
 
   /// Send a chat message to the server
   ///

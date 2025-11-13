@@ -246,9 +246,9 @@ struct Application: App {
         Divider()
         
         Button("Broadcast Message...") {
-          // TODO: Implement broadcast message when user is allowed.
+          activeServerState?.broadcastShown = true
         }
-        .disabled(true)
+        .disabled(activeHotline?.access?.contains(.canBroadcast) != true)
         .keyboardShortcut(.init("B"), modifiers: .command)
         
         Divider()
@@ -274,15 +274,12 @@ struct Application: App {
         .disabled(activeHotline?.status != .loggedIn)
         .keyboardShortcut(.init("4"), modifiers: .command)
         
-        if activeHotline?.access?.contains(.canOpenUsers) == true {
-          Divider()
-          
-          Button("Manage Server...") {
-            activeServerState?.accountsShown = true
-          }
-          .disabled(activeHotline?.status != .loggedIn || activeHotline?.access?.contains(.canOpenUsers) != true  )
-//          .keyboardShortcut(.init("5"), modifiers: .command)
+        Divider()
+        
+        Button("Manage Accounts...") {
+          activeServerState?.accountsShown = true
         }
+        .disabled(activeHotline?.status != .loggedIn || activeHotline?.access?.contains(.canOpenUsers) != true)
       }
     }
     

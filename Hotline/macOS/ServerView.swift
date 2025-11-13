@@ -154,6 +154,11 @@ struct ServerView: View {
           .onChange(of: Prefs.shared.automaticMessage) {
             Task { try? await self.model.sendUserPreferences() }
           }
+          .sheet(isPresented: self.$state.broadcastShown) {
+            BroadcastMessageView()
+              .environment(self.model)
+              .presentationSizing(.fitted)
+          }
           .sheet(isPresented: self.$state.accountsShown) {
             AccountManagerView()
               .environment(self.model)
@@ -334,9 +339,9 @@ struct ServerView: View {
               Button {
                 self.state.accountsShown = true
               } label: {
-                Label("Manage Server", systemImage: "gear")
+                Label("Manage Accounts", systemImage: "gear")
               }
-              .help("Manage Server")
+              .help("Manage Accounts")
             }
           }
         }
