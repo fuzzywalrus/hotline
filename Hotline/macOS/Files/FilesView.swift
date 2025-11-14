@@ -235,7 +235,7 @@ struct FilesView: View {
       Text("You cannot undo this action.")
     })
     .sheet(item: self.$fileDetails) { item in
-      FileDetailsSheet(fd: item)
+      FileDetailsSheet(details: item)
     }
     .fileImporter(isPresented: $uploadFileSelectorDisplayed, allowedContentTypes: [.data, .folder], allowsMultipleSelection: false, onCompletion: { results in
       switch results {

@@ -789,7 +789,6 @@ class HotlineState: Equatable {
 
   // MARK: - Users
 
-  @MainActor
   func getUserList() async throws {
     guard let client = self.client else {
       throw HotlineClientError.notConnected
@@ -801,7 +800,6 @@ class HotlineState: Equatable {
 
   // MARK: - Files
   
-  @MainActor
   @discardableResult
   func getFileList(path: [String] = [], suppressErrors: Bool = false, preferCache: Bool = false) async throws -> [FileInfo] {
     guard let client = self.client else {
@@ -832,7 +830,6 @@ class HotlineState: Equatable {
     return newFiles
   }
 
-  @MainActor
   func getFileDetails(_ fileName: String, path: [String]) async throws -> FileDetails? {
     guard let client = self.client else {
       throw HotlineClientError.notConnected
@@ -846,7 +843,26 @@ class HotlineState: Equatable {
     return try await client.getFileInfo(name: fileName, path: fullPath)
   }
   
-  @MainActor
+  @discardableResult
+  func setFileInfo(fileName: String, path filePath: [String], fileNewName: String?, comment: String?) async throws -> Bool {
+    guard let client = self.client else {
+      throw HotlineClientError.notConnected
+    }
+    
+    do {
+      try await client.setFileInfo(name: fileName, path: filePath, newName: fileNewName, comment: comment)
+      self.invalidateFileListCache(for: filePath, includingAncestors: true)
+      return true
+    }
+    catch let error as HotlineClientError {
+      self.errorMessage = error.userMessage
+      self.errorDisplayed = true
+    }
+    
+    return false
+  }
+  
+  @discardableResult
   func newFolder(name: String, parentPath: [String]) async throws -> Bool {
     guard let client = self.client else {
       throw HotlineClientError.notConnected
@@ -1402,12 +1418,6 @@ class HotlineState: Equatable {
       // Store the transfer
       AppState.shared.registerTransferTask(uploadTask, transferID: transfer.id)
     }
-  }
-
-  func setFileInfo(fileName: String, path filePath: [String], fileNewName: String?, comment: String?, encoding: String.Encoding = .utf8) {
-    // TODO: Implement setFileInfo in HotlineClient
-    // This method updates file metadata (name and/or comment)
-    print("setFileInfo not yet implemented in HotlineState/HotlineClient")
   }
 
   @MainActor

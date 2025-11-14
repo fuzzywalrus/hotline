@@ -645,6 +645,29 @@ public actor HotlineClient {
       modified: fileModifyDate
     )
   }
+  
+  /// Set a file's information (name/comment)
+  ///
+  /// - Parameters:
+  ///   - name: File name
+  ///   - path: Directory path containing the file
+  ///   - newName: Name to set the file to
+  ///   - comment: Comment to set on the file
+  public func setFileInfo(name: String, path: [String], newName: String? = nil, comment: String? = nil, encoding: String.Encoding = .utf8) async throws {
+    var transaction = HotlineTransaction(id: self.generateTransactionID(), type: .setFileInfo)
+    transaction.setFieldString(type: .fileName, val: name)
+    transaction.setFieldPath(type: .filePath, val: path)
+    
+    if let newName {
+      transaction.setFieldString(type: .fileNewName, val: newName)
+    }
+    
+    if let comment {
+      transaction.setFieldString(type: .fileComment, val: comment)
+    }
+
+    try await sendTransaction(transaction)
+  }
 
   /// Delete a file or folder
   ///

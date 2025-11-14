@@ -3,34 +3,35 @@ import SwiftUI
 
 struct FileDetailsSheet: View {
   @Environment(HotlineState.self) private var model: HotlineState
-  @Environment(\.presentationMode) var presentationMode
+  @Environment(\.dismiss) private var dismiss
 
-  var fd: FileDetails
+  var details: FileDetails
   
+  @State private var saving: Bool = false
   @State private var comment: String = ""
   @State private var filename: String = ""
   
   var body: some View {
     VStack(alignment: .leading, spacing: 16) {
       HStack(alignment: .center, spacing: 16){
-        if self.fd.type == "Folder" {
+        if self.details.type == "Folder" {
           FolderIconView()
             .frame(width: 32, height: 32)
         }
         else {
-          FileIconView(filename: fd.name, fileType: nil)
+          FileIconView(filename: self.details.name, fileType: nil)
             .frame(width: 32, height: 32)
         }
-        TextField("", text: $filename)
-          .disabled(!self.canRename())
+        TextField("File Name", text: $filename)
+          .disabled(!self.canRename)
       }
       
       let rows: [(String, String)] = [
-        ("Type", fd.type),
-        ("Creator", fd.creator),
-        ("Size", self.formattedSize(byteCount: fd.size)),
-        ("Created", Self.dateFormatter.string(from: fd.created)),
-        ("Modified", Self.dateFormatter.string(from: fd.modified))
+        ("Type", self.details.type),
+        ("Creator", self.details.creator),
+        ("Size", self.formattedSize(byteCount: self.details.size)),
+        ("Created", Self.dateFormatter.string(from: self.details.created)),
+        ("Modified", Self.dateFormatter.string(from: self.details.modified))
       ]
       
       Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 8) {
@@ -54,45 +55,64 @@ struct FileDetailsSheet: View {
       .font(.body)
       .lineLimit(10, reservesSpace: true)
       .padding(.leading, 32 + 16)
-      .disabled(!self.canSetComment())
+      .disabled(!self.canSetComment)
     }
     .padding(.vertical, 24)
     .padding(.horizontal, 24)
     .frame(width: 400)
     .toolbar {
+      if self.saving {
+        ToolbarItem {
+          ProgressView()
+            .controlSize(.small)
+        }
+      }
+      
       ToolbarItem(placement: .cancellationAction) {
         Button("Cancel") {
-          presentationMode.wrappedValue.dismiss()
+          self.dismiss()
         }
       }
       
       ToolbarItem(placement: .primaryAction) {
         Button{
           var editedFilename: String?
-          if filename != fd.name {
-            editedFilename = filename
+          if self.filename != self.details.name {
+            editedFilename = self.filename
           }
           
           var editedComment: String?
-          if comment != fd.comment {
-            editedComment = comment
+          if self.comment != self.details.comment {
+            editedComment = self.comment
           }
           
-          model.setFileInfo(fileName: fd.name, path: fd.path, fileNewName: editedFilename, comment: editedComment)
-          presentationMode.wrappedValue.dismiss()
-          
-          // TODO: Update the file list if the filename was changed
+          Task {
+            self.saving = true
+            defer { self.saving = false }
+            
+            if editedComment != nil || editedFilename != nil {
+              if try await self.model.setFileInfo(fileName: self.details.name, path: self.details.path, fileNewName: editedFilename, comment: editedComment) {
+                try await self.model.getFileList(path: self.details.path)
+              }
+            }
+            
+            // We dismiss even if there is an error for now
+            // This is not ideal as we may lose a user's written comment
+            // or new file name, but SwiftUI doesn't show the current
+            // alert above this sheet so we'll need a different way of
+            // handling errors to make this work. Until then...
+            self.dismiss()
+          }
         } label: {
           Text("Save")
-        }.disabled(!isEdited())
+        }
       }
     }
     .onAppear {
-      self.filename = fd.name
-      self.comment = fd.comment
+      self.filename = self.details.name
+      self.comment = self.details.comment
     }
   }
-  
   
   static var dateFormatter: DateFormatter = {
     var dateFormatter = DateFormatter()
@@ -124,24 +144,24 @@ struct FileDetailsSheet: View {
   }
   
   private func isEdited() -> Bool {
-    return self.filename != fd.name || self.comment != fd.comment
+    return self.filename != self.details.name || self.comment != self.details.comment
   }
   
-  private func canRename() -> Bool {
-    if self.fd.type == "fldr" {
-      return model.access?.contains(.canRenameFolders) == true
+  private var canRename: Bool {
+    if self.details.type == "fldr" || self.details.type == "Folder" {
+      return self.model.access?.contains(.canRenameFolders) == true
     }
-    return model.access?.contains(.canRenameFiles) == true
+    return self.model.access?.contains(.canRenameFiles) == true
   }
   
-  private func canSetComment() -> Bool {
-    if self.fd.type == "fldr" {
-      return model.access?.contains(.canSetFolderComment) == true
+  private var canSetComment: Bool {
+    if self.details.type == "fldr" || self.details.type == "Folder" {
+      return self.model.access?.contains(.canSetFolderComment) == true
     }
-    return model.access?.contains(.canSetFileComment) == true
+    return self.model.access?.contains(.canSetFileComment) == true
   }
 }
 
 //#Preview {
-//  FileDetailsView(fd: FileDetails(name: "AppleWorks 6.sit", path: [""], size: 24601664, comment: "test comment", type: "SITD", creator: "SIT!", created: Date.now, modified: Date.now ))
+//  FileDetailsView(details: FileDetails(name: "AppleWorks 6.sit", path: [""], size: 24601664, comment: "test comment", type: "SITD", creator: "SIT!", created: Date.now, modified: Date.now ))
 //}
