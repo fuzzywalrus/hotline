@@ -516,6 +516,15 @@ public class HotlineFile: Identifiable, Hashable {
   }
 }
 
+public struct HotlineUserClientInfo: Identifiable {
+  public var username: String
+  public var details: String
+  
+  public var id: String {
+    self.username
+  }
+}
+
 public struct HotlineUser: Identifiable, Hashable, Sendable {
   public let id: UInt16
   public let iconID: UInt16

@@ -552,7 +552,7 @@ public actor HotlineClient {
   ///
   /// - Parameters:
   ///   - userID: Target user ID
-  public func getClientInfoText(for userID: UInt16) async throws -> (username: String, info: String)? {
+  public func getClientInfoText(for userID: UInt16) async throws -> HotlineUserClientInfo? {
     var transaction = HotlineTransaction(id: self.generateTransactionID(), type: .getClientInfoText)
     transaction.setFieldUInt16(type: .userID, val: userID)
 
@@ -560,7 +560,7 @@ public actor HotlineClient {
     
     if let username = reply.getField(type: .userName)?.getString(),
        let info = reply.getField(type: .data)?.getString() {
-      return (username: username, info: info)
+      return HotlineUserClientInfo(username: username, details: info)
     }
     
     return nil
