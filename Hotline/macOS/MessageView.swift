@@ -1,37 +1,5 @@
 import SwiftUI
 
-struct UserInfo: Identifiable {
-  let username: String
-  let data: String
-  
-  var id: String {
-    self.username
-  }
-}
-
-struct UserInfoView: View {
-  @Environment(\.dismiss) private var dismiss
-  
-  let info: UserInfo
-  
-  var body: some View {
-    ScrollView(.vertical) {
-      Text(self.info.data)
-        .fontDesign(.monospaced)
-        .textSelection(.enabled)
-        .padding()
-    }
-    .frame(width: 300, height: 400)
-    .toolbar {
-      if #available(macOS 26.0, *) {
-        Button(role: .close) {
-          self.dismiss()
-        }
-      }
-    }
-  }
-}
-
 struct MessageView: View {
   @Environment(HotlineState.self) private var model: HotlineState
   @Environment(\.colorScheme) private var colorScheme
@@ -39,7 +7,7 @@ struct MessageView: View {
   @State private var input: String = ""
   @State private var scrollPos: Int?
   @State private var contentHeight: CGFloat = 0
-  @State private var userInfo: UserInfo?
+  @State private var userInfo: HotlineUserClientInfo?
   
   @Namespace private var bottomID
   @FocusState private var focusedField: FocusedField?
@@ -60,11 +28,13 @@ struct MessageView: View {
     }
     .background(Color(nsColor: .textBackgroundColor))
     .toolbar {
-      ToolbarItem {
-        Button {
-          self.getUserInfo()
-        } label: {
-          Image(systemName: "info.circle")
+      if self.model.access?.contains(.canGetClientInfo) == true {
+        ToolbarItem {
+          Button {
+            self.getUserInfo()
+          } label: {
+            Image(systemName: "info.circle")
+          }
         }
       }
     }
@@ -75,8 +45,8 @@ struct MessageView: View {
   
   private func getUserInfo() {
     Task {
-      if let (username, info) = try await self.model.getClientInfoText(id: self.userID) {
-        self.userInfo = UserInfo(username: username, data: info)
+      if let info = try await self.model.getClientInfoText(id: self.userID) {
+        self.userInfo = info
       }
     }
   }
