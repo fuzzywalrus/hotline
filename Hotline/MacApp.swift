@@ -185,13 +185,13 @@ struct Application: App {
       Server(name: nil, description: nil, address: "")
     }
     .modelContainer(self.modelContainer)
-    .defaultSize(width: 690, height: 760)
+    .defaultSize(width: 780, height: 640)
     .defaultPosition(.center)
     .onChange(of: activeServerState) {
-      AppState.shared.activeServerState = activeServerState
+      AppState.shared.activeServerState = self.activeServerState
     }
     .onChange(of: activeHotline) {
-      AppState.shared.activeHotline = activeHotline
+      AppState.shared.activeHotline = self.activeHotline
     }
     .commands {
       CommandGroup(replacing: .newItem) {

@@ -174,7 +174,7 @@ class HotlineState: Equatable {
       self.updateServerTitle()
     }
   }
-  var serverTitle: String = "Server"
+  var serverTitle: String = ""
   var username: String = "guest"
   var iconID: Int = 414
   var access: HotlineUserAccessOptions?
@@ -361,17 +361,40 @@ class HotlineState: Equatable {
         self.downloadBanner()
       }
 
-    } catch {
+    }
+    catch let clientError as HotlineClientError {
+      switch clientError {
+      case .connectionFailed(_):
+        self.displayError(clientError, message: "This server appears to be offline.")
+      case .loginFailed(let msg):
+        self.displayError(clientError, message: msg)
+      case .serverError(_, let msg):
+        self.displayError(clientError, message: msg)
+      default:
+        self.displayError(clientError)
+      }
+      if let client = self.client {
+        await client.disconnect()
+        self.client = nil
+      }
+      self.status = .disconnected
+      throw clientError
+    }
+    catch {
       print("HotlineState.login(): Login failed with error: \(error)")
       if let client = self.client {
         await client.disconnect()
         self.client = nil
       }
-      self.status = .disconnected // .failed(error.localizedDescription)
-      self.errorDisplayed = true
-      self.errorMessage = error.localizedDescription
+      self.status = .disconnected
+      self.displayError(error)
       throw error
     }
+  }
+  
+  private func displayError(_ error: Error, message: String? = nil) {
+    self.errorDisplayed = true
+    self.errorMessage = message ?? error.localizedDescription
   }
 
   /// Disconnect from the server (user-initiated)
@@ -812,6 +835,20 @@ class HotlineState: Equatable {
     }
     
     return nil
+  }
+  
+  func disconnectUser(id userID: UInt16, options: HotlineUserDisconnectOptions?) async throws {
+    guard let client = self.client else {
+      throw HotlineClientError.notConnected
+    }
+    
+    do {
+      try await client.disconnectUser(userID: userID, options: options)
+    }
+    catch let error as HotlineClientError {
+      self.errorMessage = error.userMessage
+      self.errorDisplayed = true
+    }
   }
 
   // MARK: - Files
@@ -1948,7 +1985,7 @@ class HotlineState: Equatable {
   // MARK: - Utilities
 
   func updateServerTitle() {
-    self.serverTitle = self.serverName ?? self.server?.name ?? self.server?.address ?? "Server"
+    self.serverTitle = self.serverName ?? self.server?.name ?? self.server?.address ?? "Hotline"
   }
 
   // News helpers

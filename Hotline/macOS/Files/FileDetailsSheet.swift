@@ -14,7 +14,7 @@ struct FileDetailsSheet: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 16) {
       HStack(alignment: .center, spacing: 16){
-        if self.details.type == "Folder" {
+        if self.isFolder {
           FolderIconView()
             .frame(width: 32, height: 32)
         }
@@ -22,6 +22,7 @@ struct FileDetailsSheet: View {
           FileIconView(filename: self.details.name, fileType: nil)
             .frame(width: 32, height: 32)
         }
+        
         TextField("File Name", text: $filename)
           .disabled(!self.canRename)
       }
@@ -114,6 +115,28 @@ struct FileDetailsSheet: View {
     }
   }
   
+  private var isFolder: Bool {
+    self.details.type == "Folder" || self.details.type == "fldr"
+  }
+  
+  private func isEdited() -> Bool {
+    return self.filename != self.details.name || self.comment != self.details.comment
+  }
+  
+  private var canRename: Bool {
+    if self.isFolder {
+      return self.model.access?.contains(.canRenameFolders) == true
+    }
+    return self.model.access?.contains(.canRenameFiles) == true
+  }
+  
+  private var canSetComment: Bool {
+    if self.isFolder {
+      return self.model.access?.contains(.canSetFolderComment) == true
+    }
+    return self.model.access?.contains(.canSetFileComment) == true
+  }
+  
   static var dateFormatter: DateFormatter = {
     var dateFormatter = DateFormatter()
     dateFormatter.dateStyle = .long
@@ -141,24 +164,6 @@ struct FileDetailsSheet: View {
   private func formattedSize(byteCount: Int) -> String {
     let formattedByteCount = Self.byteCountSizeFormatter.string(from: NSNumber(value:byteCount)) ?? "0"
     return "\(FileItemView.byteFormatter.string(fromByteCount: Int64(byteCount))) (\(formattedByteCount) bytes)"
-  }
-  
-  private func isEdited() -> Bool {
-    return self.filename != self.details.name || self.comment != self.details.comment
-  }
-  
-  private var canRename: Bool {
-    if self.details.type == "fldr" || self.details.type == "Folder" {
-      return self.model.access?.contains(.canRenameFolders) == true
-    }
-    return self.model.access?.contains(.canRenameFiles) == true
-  }
-  
-  private var canSetComment: Bool {
-    if self.details.type == "fldr" || self.details.type == "Folder" {
-      return self.model.access?.contains(.canSetFolderComment) == true
-    }
-    return self.model.access?.contains(.canSetFileComment) == true
   }
 }
 
