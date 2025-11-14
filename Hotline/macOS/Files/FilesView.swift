@@ -198,28 +198,32 @@ struct FilesView: View {
           ToolbarSpacer()
         }
         
-        ToolbarItem {
-          Button {
-            self.newFolderShown = true
-          } label: {
-            Label("New Folder", systemImage: "folder.badge.plus")
-          }
-          .help("New Folder")
-          .popover(isPresented: self.$newFolderShown, arrowEdge: .bottom) {
-            NewFolderPopover { folderName in
-              self.newFolder(name: folderName, parent: self.selection)
+        if self.model.access?.contains(.canCreateFolders) == true {
+          ToolbarItem {
+            Button {
+              self.newFolderShown = true
+            } label: {
+              Label("New Folder", systemImage: "folder.badge.plus")
+            }
+            .help("New Folder")
+            .popover(isPresented: self.$newFolderShown, arrowEdge: .bottom) {
+              NewFolderPopover { folderName in
+                self.newFolder(name: folderName, parent: self.selection)
+              }
             }
           }
         }
         
-        ToolbarItem {
-          Button {
-            self.confirmDeleteShown = true
-          } label: {
-            Label("Delete", systemImage: "trash")
+        if self.model.access?.contains(.canDeleteFiles) == true || self.model.access?.contains(.canDeleteFolders) == true {
+          ToolbarItem {
+            Button {
+              self.confirmDeleteShown = true
+            } label: {
+              Label("Delete", systemImage: "trash")
+            }
+            .disabled(self.selection == nil)
+            .help("Delete")
           }
-          .disabled(self.selection == nil)
-          .help("Delete")
         }
       }
     }

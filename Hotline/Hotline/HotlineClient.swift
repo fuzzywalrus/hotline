@@ -181,7 +181,16 @@ public actor HotlineClient {
 
     // Connect socket
     print("HotlineClient.connect(): Connecting socket...")
-    let socket = try await NetSocket.connect(host: host, port: port)
+    let socket: NetSocket
+    do {
+      socket = try await NetSocket.connect(host: host, port: port)
+    }
+    catch let socketError as NetSocketError {
+      if case .failed(_) = socketError {
+        throw HotlineClientError.connectionFailed(socketError)
+      }
+      throw socketError
+    }
     print("HotlineClient.connect(): Socket connected")
 
     // Perform handshake
@@ -589,6 +598,22 @@ public actor HotlineClient {
     }
 
     try await socket.send(transaction, endian: .big)
+  }
+  
+  /// Force a user to disconnect from the server
+  ///
+  /// - Parameters:
+  ///   - userID: Target user ID
+  ///   - options: If specified, temporarily or permanently ban the user
+  public func disconnectUser(userID: UInt16, options: HotlineUserDisconnectOptions? = nil) async throws {
+    var transaction = HotlineTransaction(id: self.generateTransactionID(), type: .disconnectUser)
+    
+    transaction.setFieldUInt16(type: .userID, val: userID)
+    if let options {
+      transaction.setFieldUInt16(type: .options, val: options.rawValue)
+    }
+    
+    try await self.sendTransaction(transaction)
   }
 
   // MARK: - Agreement

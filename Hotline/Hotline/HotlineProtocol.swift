@@ -10,6 +10,11 @@ struct HotlinePorts {
   static let DefaultTrackerPort: Int = 5498
 }
 
+public enum HotlineUserDisconnectOptions: UInt16 {
+  case temporarilyBan = 1
+  case permanentlyBan = 2
+}
+
 public struct HotlineUserOptions: OptionSet, Sendable {
   public let rawValue: UInt16
 

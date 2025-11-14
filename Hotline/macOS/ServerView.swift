@@ -111,7 +111,7 @@ struct ServerView: View {
           self.connectForm
           Spacer()
         }
-        .navigationTitle("New Connection")
+        .navigationTitle(self.model.serverTitle.isBlank ? "Hotline" : self.model.serverTitle)
       }
       else if self.model.status.isLoggingIn {
         HStack {
@@ -131,7 +131,7 @@ struct ServerView: View {
         }
         .frame(maxWidth: 300)
         .padding()
-        .navigationTitle("New Connection")
+        .navigationTitle(self.model.serverTitle.isBlank ? "Hotline" : self.model.serverTitle)
       }
       else if self.model.status == .loggedIn {
         self.serverView
@@ -155,7 +155,7 @@ struct ServerView: View {
             Task { try? await self.model.sendUserPreferences() }
           }
           .sheet(isPresented: self.$state.broadcastShown) {
-            BroadcastMessageView()
+            BroadcastMessageSheet()
               .environment(self.model)
               .presentationSizing(.fitted)
           }
@@ -336,8 +336,8 @@ struct ServerView: View {
   var serverView: some View {
     NavigationSplitView {
       self.navigationList
-        .frame(maxWidth: .infinity)
-        .navigationSplitViewColumnWidth(min: 200, ideal: 250, max: 500)
+        .navigationSplitViewColumnWidth(200)
+//        .navigationSplitViewColumnWidth(min: 150, ideal: 200, max: 400)
         .toolbar(removing: .sidebarToggle)
 //        .toolbar {
 //          if self.model.access?.contains(.canOpenUsers) == true {
@@ -357,22 +357,22 @@ struct ServerView: View {
           ChatView()
             .navigationTitle(model.serverTitle)
 //            .navigationSubtitle("Public Chat")
-            .navigationSplitViewColumnWidth(min: 250, ideal: 500)
+//            .navigationSplitViewColumnWidth(min: 250, ideal: 500)
         case .news:
           NewsView()
             .navigationTitle(model.serverTitle)
 //            .navigationSubtitle("Newsgroups")
-            .navigationSplitViewColumnWidth(min: 250, ideal: 500)
+//            .navigationSplitViewColumnWidth(min: 250, ideal: 500)
         case .board:
           MessageBoardView()
             .navigationTitle(model.serverTitle)
 //            .navigationSubtitle("Message Board")
-            .navigationSplitViewColumnWidth(min: 250, ideal: 500)
+//            .navigationSplitViewColumnWidth(min: 250, ideal: 500)
         case .files:
           FilesView()
             .navigationTitle(model.serverTitle)
 //            .navigationSubtitle("Shared Files")
-            .navigationSplitViewColumnWidth(min: 250, ideal: 500)
+//            .navigationSplitViewColumnWidth(min: 250, ideal: 500)
 //        case .accounts:
 //            AccountManagerView()
 //              .navigationTitle(model.serverTitle)
@@ -383,14 +383,11 @@ struct ServerView: View {
           MessageView(userID: userID)
             .navigationTitle(model.serverTitle)
 //            .navigationSubtitle(user?.name ?? "Private Message")
-            .navigationSplitViewColumnWidth(min: 250, ideal: 500)
+//            .navigationSplitViewColumnWidth(min: 250, ideal: 500)
             .onAppear {
               model.markInstantMessagesAsRead(userID: userID)
             }
         }
-    }
-    .background {
-      Color.red
     }
   }
   

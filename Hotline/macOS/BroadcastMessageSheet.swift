@@ -2,7 +2,7 @@ import SwiftUI
 
 fileprivate let CHARACTER_LIMIT: Int = 255
 
-struct BroadcastMessageView: View {
+struct BroadcastMessageSheet: View {
   @Environment(HotlineState.self) private var model: HotlineState
   @Environment(\.dismiss) private var dismiss
   

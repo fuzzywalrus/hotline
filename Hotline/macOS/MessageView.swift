@@ -8,6 +8,8 @@ struct MessageView: View {
   @State private var scrollPos: Int?
   @State private var contentHeight: CGFloat = 0
   @State private var userInfo: HotlineUserClientInfo?
+  @State private var disconnectConfirmShown: Bool = false
+  @State private var username: String?
   
   @Namespace private var bottomID
   @FocusState private var focusedField: FocusedField?
@@ -27,6 +29,10 @@ struct MessageView: View {
       self.inputBar
     }
     .background(Color(nsColor: .textBackgroundColor))
+    .onAppear {
+      let user = self.model.users.first(where: { $0.id == userID })
+      self.username = user?.name
+    }
     .toolbar {
       if self.model.access?.contains(.canGetClientInfo) == true {
         ToolbarItem {
@@ -35,11 +41,30 @@ struct MessageView: View {
           } label: {
             Image(systemName: "info.circle")
           }
+          .help("View \(self.username ?? "user")'s information")
+        }
+      }
+      
+      if self.model.access?.contains(.canDisconnectUsers) == true {
+        ToolbarItem {
+          Button {
+            self.disconnectConfirmShown = true
+          } label: {
+            Image(systemName: "nosign")
+          }
+          .help("Disconnect \(self.username ?? "this user")")
         }
       }
     }
     .sheet(item: self.$userInfo) { info in
-      UserInfoView(info: info)
+      UserClientInfoSheet(info: info)
+    }
+    .alert("Are you sure you want to disconnect \(self.username ?? "this user")?", isPresented: self.$disconnectConfirmShown) {
+      Button("Disconnect", role: .destructive) {
+        self.disconnectUser()
+      }
+    } message: {
+      Text("They will be disconnected from the server, but may reconnect.")
     }
   }
   
@@ -51,10 +76,15 @@ struct MessageView: View {
     }
   }
   
+  private func disconnectUser() {
+    Task {
+      try await self.model.disconnectUser(id: self.userID, options: nil)
+    }
+  }
+  
   private var inputBar: some View {
     HStack(alignment: .lastTextBaseline, spacing: 0) {
-      let user = self.model.users.first(where: { $0.id == userID })
-      TextField("Message \(user?.name ?? "")", text: $input, axis: .vertical)
+      TextField("Message \(self.username ?? "")", text: $input, axis: .vertical)
         .focused($focusedField, equals: .chatInput)
         .textFieldStyle(.plain)
         .lineLimit(1...5)

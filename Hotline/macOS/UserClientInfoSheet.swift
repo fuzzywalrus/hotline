@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct UserInfoView: View {
+struct UserClientInfoSheet: View {
   @Environment(\.dismiss) private var dismiss
   
   let info: HotlineUserClientInfo
