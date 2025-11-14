@@ -797,6 +797,22 @@ class HotlineState: Equatable {
     let hotlineUsers = try await client.getUserList()
     self.users = hotlineUsers.map { User(hotlineUser: $0) }
   }
+  
+  func getClientInfoText(id userID: UInt16) async throws -> (username: String, info: String)? {
+    guard let client = self.client else {
+      throw HotlineClientError.notConnected
+    }
+    
+    do {
+      return try await client.getClientInfoText(for: userID)
+    }
+    catch let error as HotlineClientError {
+      self.errorMessage = error.userMessage
+      self.errorDisplayed = true
+    }
+    
+    return nil
+  }
 
   // MARK: - Files
   

@@ -547,6 +547,24 @@ public actor HotlineClient {
 
     try await socket.send(transaction, endian: .big)
   }
+  
+  /// Get information text about a user
+  ///
+  /// - Parameters:
+  ///   - userID: Target user ID
+  public func getClientInfoText(for userID: UInt16) async throws -> (username: String, info: String)? {
+    var transaction = HotlineTransaction(id: self.generateTransactionID(), type: .getClientInfoText)
+    transaction.setFieldUInt16(type: .userID, val: userID)
+
+    let reply = try await self.sendTransaction(transaction)
+    
+    if let username = reply.getField(type: .userName)?.getString(),
+       let info = reply.getField(type: .data)?.getString() {
+      return (username: username, info: info)
+    }
+    
+    return nil
+  }
 
   /// Update this client's user info (name, icon, options)
   ///
