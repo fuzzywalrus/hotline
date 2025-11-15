@@ -73,5 +73,5 @@ And this project is an attempt to create a modern open source version of Hotline
 | File search                |   ✓   |       |        |          |
 | File management            |       |       |        |          |
 | Folder downloading         |   ✓   |       |        |          |
-| Folder uploading           |       |       |        |          |
+| Folder uploading           |   ✓   |       |        |          |
 | Custom icon sets           |       |       |        |          |
