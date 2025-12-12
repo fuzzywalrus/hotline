@@ -11,7 +11,8 @@
       "Bash(xargs kill:*)",
       "Bash(pkill:*)",
       "Bash(npm uninstall:*)",
-      "Bash(test -f:*)"
+      "Bash(test -f:*)",
+      "Bash(cargo check:*)"
     ]
   }
 }

@@ -39,6 +39,7 @@ export default function ServerWindow({ serverId, serverName, onClose }: ServerWi
   const [users, setUsers] = useState<User[]>([]);
   const [files, setFiles] = useState<FileItem[]>([]);
   const [currentPath, setCurrentPath] = useState<string[]>([]);
+  const [downloadProgress, setDownloadProgress] = useState<Map<string, number>>(new Map());
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Listen for incoming chat messages
@@ -129,6 +130,21 @@ export default function ServerWindow({ serverId, serverName, onClose }: ServerWi
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Listen for download progress events
+  useEffect(() => {
+    const unlisten = listen<{ fileName: string; bytesRead: number; totalBytes: number; progress: number }>(
+      `download-progress-${serverId}`,
+      (event) => {
+        const { fileName, progress } = event.payload;
+        setDownloadProgress((prev) => new Map(prev).set(fileName, progress));
+      }
+    );
+
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, [serverId]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -357,24 +373,60 @@ export default function ServerWindow({ serverId, serverName, onClose }: ServerWi
                           </div>
                         </div>
                         {!file.isFolder && (
-                          <button
-                            onClick={async () => {
-                              try {
-                                await invoke('download_file', {
-                                  serverId,
-                                  path: [...currentPath, file.name],
-                                  fileName: file.name,
-                                  fileSize: file.size,
-                                });
-                              } catch (error) {
-                                console.error('Download failed:', error);
-                                alert(`Download failed: ${error}`);
-                              }
-                            }}
-                            className="opacity-0 group-hover:opacity-100 px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded transition-opacity"
-                          >
-                            Download
-                          </button>
+                          <div className="flex items-center gap-2">
+                            {downloadProgress.has(file.name) && downloadProgress.get(file.name)! < 100 ? (
+                              <div className="flex items-center gap-2">
+                                <div className="w-24 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                                  <div
+                                    className="h-full bg-blue-600 transition-all duration-300"
+                                    style={{ width: `${downloadProgress.get(file.name)}%` }}
+                                  />
+                                </div>
+                                <span className="text-xs text-gray-600 dark:text-gray-400">
+                                  {downloadProgress.get(file.name)}%
+                                </span>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    // Initialize progress for this file
+                                    setDownloadProgress((prev) => new Map(prev).set(file.name, 0));
+
+                                    const result = await invoke<string>('download_file', {
+                                      serverId,
+                                      path: currentPath,
+                                      fileName: file.name,
+                                      fileSize: file.size,
+                                    });
+
+                                    // Remove this file from progress map
+                                    setDownloadProgress((prev) => {
+                                      const next = new Map(prev);
+                                      next.delete(file.name);
+                                      return next;
+                                    });
+
+                                    alert(`✅ ${result}`);
+                                  } catch (error) {
+                                    console.error('Download failed:', error);
+
+                                    // Remove this file from progress map on error
+                                    setDownloadProgress((prev) => {
+                                      const next = new Map(prev);
+                                      next.delete(file.name);
+                                      return next;
+                                    });
+
+                                    alert(`❌ Download failed: ${error}`);
+                                  }
+                                }}
+                                className="opacity-0 group-hover:opacity-100 px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded transition-opacity"
+                              >
+                                Download
+                              </button>
+                            )}
+                          </div>
                         )}
                       </div>
                     ))}

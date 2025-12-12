@@ -71,7 +71,7 @@ pub async fn download_file(
     state: State<'_, AppState>,
 ) -> Result<String, String> {
     println!("Command: download_file {} (size: {} bytes)", file_name, file_size);
-    state.download_file(&server_id, path, file_name).await
+    state.download_file(&server_id, path, file_name, file_size).await
 }
 
 #[tauri::command]

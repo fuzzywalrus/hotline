@@ -1,8 +1,8 @@
 // Hotline client implementation
 
 use super::constants::{
-    FieldType, TransactionType, PROTOCOL_ID, PROTOCOL_SUBVERSION, PROTOCOL_VERSION, SUBPROTOCOL_ID,
-    TRANSACTION_HEADER_SIZE,
+    FieldType, TransactionType, FILE_TRANSFER_ID, PROTOCOL_ID, PROTOCOL_SUBVERSION,
+    PROTOCOL_VERSION, SUBPROTOCOL_ID, TRANSACTION_HEADER_SIZE,
 };
 use super::transaction::{Transaction, TransactionField};
 use super::types::{Bookmark, ConnectionStatus, ServerInfo};
@@ -820,7 +820,14 @@ impl HotlineClient {
             .map_err(|_| "Timeout waiting for download reply".to_string())?
             .ok_or("Channel closed".to_string())?;
 
-        println!("DownloadFile reply received: error_code={}", reply.error_code);
+        println!("DownloadFile reply received: error_code={}, {} fields", reply.error_code, reply.fields.len());
+
+        // Print all fields for debugging
+        for (i, field) in reply.fields.iter().enumerate() {
+            println!("  Field {}: type={:?}, size={} bytes, data={:02X?}",
+                i, field.field_type, field.data.len(),
+                &field.data[..std::cmp::min(20, field.data.len())]);
+        }
 
         if reply.error_code != 0 {
             let error_msg = reply
@@ -838,7 +845,210 @@ impl HotlineClient {
 
         println!("Download reference number: {}", reference_number);
 
+        // Get transfer size if available
+        let transfer_size = reply.get_field(FieldType::TransferSize)
+            .and_then(|f| f.to_u32().ok());
+
+        if let Some(size) = transfer_size {
+            println!("Transfer size from server: {} bytes", size);
+        }
+
+        // Get file size if available
+        let file_size = reply.get_field(FieldType::FileSize)
+            .and_then(|f| f.to_u32().ok());
+
+        if let Some(size) = file_size {
+            println!("File size from server: {} bytes", size);
+        }
+
+        // Check for file transfer options
+        if let Some(options_field) = reply.get_field(FieldType::FileTransferOptions) {
+            println!("File transfer options: {:02X?}", options_field.data);
+        }
+
         Ok(reference_number)
+    }
+
+    pub async fn perform_file_transfer<F>(&self, reference_number: u32, expected_size: u32, mut progress_callback: F) -> Result<Vec<u8>, String>
+    where
+        F: FnMut(u32, u32) + Send,
+    {
+        println!("Starting file transfer with reference number: {}", reference_number);
+
+        // Open a new TCP connection to the server for file transfer
+        // File transfers use port+1 (e.g., 5501 for main port 5500)
+        let transfer_port = self.bookmark.port + 1;
+        let addr = format!("{}:{}", self.bookmark.address, transfer_port);
+        println!("Connecting to file transfer port: {}", transfer_port);
+
+        let mut transfer_stream = TcpStream::connect(&addr)
+            .await
+            .map_err(|e| format!("Failed to connect for file transfer: {}", e))?;
+
+        println!("File transfer connection established");
+
+        // Send file transfer handshake
+        // Format: HTXF (4) + reference_number (4) + 0 (4) + 0 (4) = 16 bytes
+        let mut handshake = Vec::with_capacity(16);
+        handshake.extend_from_slice(FILE_TRANSFER_ID); // "HTXF"
+        handshake.extend_from_slice(&reference_number.to_be_bytes());
+        handshake.extend_from_slice(&0u32.to_be_bytes());
+        handshake.extend_from_slice(&0u32.to_be_bytes());
+
+        println!("Sending file transfer handshake ({} bytes): {:02X?}", handshake.len(), &handshake);
+        transfer_stream
+            .write_all(&handshake)
+            .await
+            .map_err(|e| format!("Failed to send file transfer handshake: {}", e))?;
+
+        transfer_stream
+            .flush()
+            .await
+            .map_err(|e| format!("Failed to flush handshake: {}", e))?;
+
+        println!("File transfer handshake sent, waiting for response...");
+
+        // Try to read any response from server first
+        let mut peek_buffer = [0u8; 4];
+        println!("Attempting to peek at server response...");
+        let bytes_read = match tokio::time::timeout(
+            Duration::from_secs(5),
+            transfer_stream.read(&mut peek_buffer)
+        ).await {
+            Ok(Ok(n)) => {
+                println!("Server sent {} bytes: {:02X?}", n, &peek_buffer[..n]);
+                n
+            }
+            Ok(Err(e)) => {
+                return Err(format!("Error reading from server: {}", e));
+            }
+            Err(_) => {
+                return Err("Timeout waiting for server response - server sent nothing".to_string());
+            }
+        };
+
+        if bytes_read == 0 {
+            return Err("Server closed connection immediately after handshake".to_string());
+        }
+
+        // Read rest of header (total 24 bytes for FILP header)
+        // Format: FILP (4) + version (2) + reserved (16) + fork count (2)
+        let mut response_header = [0u8; 24];
+        response_header[..bytes_read].copy_from_slice(&peek_buffer[..bytes_read]);
+
+        if bytes_read < 24 {
+            transfer_stream
+                .read_exact(&mut response_header[bytes_read..])
+                .await
+                .map_err(|e| format!("Failed to read rest of file transfer header: {}", e))?;
+        }
+
+        println!("File transfer header received (24 bytes): {:02X?}", &response_header);
+
+        // The header should start with "FILP"
+        if &response_header[0..4] != b"FILP" {
+            return Err(format!(
+                "Invalid file transfer header: expected FILP, got {:?}",
+                String::from_utf8_lossy(&response_header[0..4])
+            ));
+        }
+
+        let version = u16::from_be_bytes([response_header[4], response_header[5]]);
+        println!("FILP version: {}", version);
+
+        // Read fork count from bytes 22-23 (after 4 + 2 + 16 bytes)
+        let fork_count = u16::from_be_bytes([response_header[22], response_header[23]]);
+        println!("File has {} fork(s)", fork_count);
+
+        // Read each fork header and data
+        let mut file_data = Vec::new();
+
+        for fork_idx in 0..fork_count {
+            // Fork header format:
+            // Fork type (4 bytes) - "DATA" or "MACR" (resource fork) or "INFO"
+            // Compression type (4 bytes)
+            // Reserved (4 bytes)
+            // Data size (4 bytes)
+            let mut fork_header = [0u8; 16];
+            transfer_stream
+                .read_exact(&mut fork_header)
+                .await
+                .map_err(|e| format!("Failed to read fork {} header: {}", fork_idx, e))?;
+
+            println!("Fork {} header bytes: {:02X?}", fork_idx, &fork_header);
+
+            let fork_type = String::from_utf8_lossy(&fork_header[0..4]).to_string();
+            let compression = u32::from_be_bytes([fork_header[4], fork_header[5], fork_header[6], fork_header[7]]);
+            let data_size = u32::from_be_bytes([fork_header[12], fork_header[13], fork_header[14], fork_header[15]]);
+
+            println!("Fork {}: type='{}', compression={}, size={} bytes", fork_idx, fork_type.trim(), compression, data_size);
+
+            // Determine actual size to read
+            // If fork header shows 0 size but this is a DATA fork, use expected_size
+            let actual_size = if data_size == 0 && fork_type.trim() == "DATA" && expected_size > 0 {
+                println!("Fork header shows 0 size, using expected size from file list: {} bytes", expected_size);
+                expected_size
+            } else {
+                if fork_type.trim() == "DATA" && data_size != expected_size && expected_size > 0 {
+                    println!("Note: DATA fork header size ({}) differs from file list size ({})", data_size, expected_size);
+                }
+                data_size
+            };
+
+            // Read fork data
+            if actual_size > 0 {
+                let is_data_fork = fork_type.trim() == "DATA";
+
+                if is_data_fork {
+                    // For DATA fork, read in chunks and report progress
+                    let chunk_size = 65536; // 64KB chunks
+                    let mut fork_data = Vec::with_capacity(actual_size as usize);
+                    let mut bytes_read = 0u32;
+                    let mut last_reported_progress = 0u32;
+
+                    while bytes_read < actual_size {
+                        let remaining = actual_size - bytes_read;
+                        let to_read = std::cmp::min(remaining, chunk_size) as usize;
+                        let mut chunk = vec![0u8; to_read];
+
+                        transfer_stream
+                            .read_exact(&mut chunk)
+                            .await
+                            .map_err(|e| format!("Failed to read fork {} data: {}", fork_idx, e))?;
+
+                        bytes_read += to_read as u32;
+                        fork_data.extend_from_slice(&chunk);
+
+                        // Only emit progress every 2% or on completion to avoid UI stuttering
+                        let current_progress = (bytes_read as f64 / actual_size as f64 * 100.0) as u32;
+                        if current_progress >= last_reported_progress + 2 || bytes_read == actual_size {
+                            progress_callback(bytes_read, actual_size);
+                            last_reported_progress = current_progress;
+                        }
+                    }
+
+                    println!("Received DATA fork: {} bytes", fork_data.len());
+                    file_data = fork_data;
+                } else {
+                    // For INFO/MACR forks, read all at once
+                    let mut fork_data = vec![0u8; actual_size as usize];
+                    transfer_stream
+                        .read_exact(&mut fork_data)
+                        .await
+                        .map_err(|e| format!("Failed to read fork {} data: {}", fork_idx, e))?;
+
+                    if fork_type.trim() == "INFO" {
+                        println!("Skipped INFO fork: {} bytes", fork_data.len());
+                    } else if fork_type.trim() == "MACR" {
+                        println!("Skipped MACR (resource) fork: {} bytes", fork_data.len());
+                    }
+                }
+            }
+        }
+
+        println!("File transfer complete: {} bytes received", file_data.len());
+
+        Ok(file_data)
     }
 
     pub async fn get_server_info(&self) -> Result<ServerInfo, String> {

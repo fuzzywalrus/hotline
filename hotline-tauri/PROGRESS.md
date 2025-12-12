@@ -8,11 +8,12 @@ This file tracks completed features and implementation notes for the Tauri port.
 2. ✅ Tracker sidebar (bookmarks + persistence)
 3. ✅ Protocol implementation (Complete: connect, handshake, login, events, keep-alive, chat send)
 4. ✅ Server window shell (basic UI with chat input)
-5. ⏸️ Chat receive & display
-6. ⏸️ User list
+5. ✅ Chat receive & display
+6. ✅ User list
 7. ⏸️ Message Board & News
-8. ⏸️ Files & transfers
-9. ⏸️ Accounts, Settings, About
+8. ✅ Files & transfers (browse, download with progress)
+9. ⏸️ File uploads
+10. ⏸️ Accounts, Settings, About
 
 ---
 
@@ -128,22 +129,43 @@ This file tracks completed features and implementation notes for the Tauri port.
 
 ## In Progress
 
-### File Downloads (Priority 1 - 🔄 IN PROGRESS)
+_No features currently in progress._
 
-**Current status:** Starting implementation
+---
 
-**Completed:**
-- [x] Add download button to file list UI (hover to reveal)
-- [x] Implement DownloadFile transaction (type 202)
-- [x] Request and receive reference number from server
+## Completed Features (continued)
 
-**Todo:**
-- [ ] Open file transfer TCP connection
-- [ ] Send file transfer handshake with reference number
-- [ ] Receive and stream file data
-- [ ] Save downloaded files to user's downloads folder
-- [ ] Show download progress indicator
-- [ ] Error handling for failed downloads
+### 2025-12-11: File Download Implementation
+
+**What was completed:**
+- Download button in file list UI (hover to reveal)
+- DownloadFile transaction (type 202) to request file and get reference number
+- File transfer protocol implementation with separate TCP connection
+- File transfer handshake (TRTP+HTXF+reference number)
+- Fork-based file data reception (FILP format with DATA/MACR forks)
+- Automatic saving to user's Downloads folder
+- Success/error notifications in UI
+
+**Files created/modified:**
+- `src-tauri/src/protocol/constants.rs` - Added FILE_TRANSFER_ID constant ("HTXF")
+- `src-tauri/src/protocol/client.rs` - Added perform_file_transfer() method
+- `src-tauri/src/state/mod.rs` - Updated download_file() to perform full transfer and save
+- `src-tauri/src/commands/mod.rs` - Updated command to pass file_size parameter
+- `src/components/server/ServerWindow.tsx` - Added success/error alerts for downloads
+
+**Implementation details:**
+- **DownloadFile transaction**: Sends path + filename, receives reference number from server
+- **File transfer connection**: Opens new TCP connection for actual data transfer
+- **Handshake format**: TRTP (4) + HTXF (4) + ref_num (4) + data_size (4) + reserved (4) = 20 bytes
+- **File format**: FILP header (16 bytes) + fork count + fork headers (16 bytes each) + fork data
+- **Fork types**: DATA fork (actual file content) and MACR fork (resource fork, ignored for now)
+- **File saving**: Uses Tauri's download_dir() API to save files to user's Downloads folder
+- **User feedback**: Alert dialogs show download success with file path or error messages
+
+**Testing status:**
+- Ready for testing with real server
+
+**Next task:** Test file downloads, add progress indicator for large files (future enhancement)
 
 ### 2025-12-11: Transaction Fix & Server Window UI
 
@@ -304,6 +326,50 @@ This file tracks completed features and implementation notes for the Tauri port.
 - `package.json` - Downgraded tailwindcss to v3
 - `postcss.config.cjs` - Renamed from .js, uses module.exports
 - `src/main.tsx` - Added `import "./App.css"`
+
+### 2025-12-11: File Download Fixes & Progress Indicator
+
+**What was completed:**
+- Fixed FILP header parsing (corrected to 24 bytes from incorrect 16 bytes)
+- Fixed file transfer port (using port+1 as per protocol spec)
+- Fixed file transfer handshake format (HTXF + ref_num + 0 + 0 = 16 bytes)
+- Fixed DATA fork size handling (use file list size when fork header shows 0)
+- Implemented download progress indicator with throttled updates
+- Support for multiple simultaneous file downloads
+
+**Bug Fix Details:**
+- **FILP Header Structure**: Format (4) + version (2) + reserved (16) + fork count (2) = 24 bytes total
+  - Previously was reading only 16 bytes, causing fork headers to be read 8 bytes too early
+  - Fork type "INFO" was appearing in wrong position
+- **File Transfer Port**: File transfers use server port + 1 (e.g., 5501 for main port 5500)
+  - Discovered from Swift reference code (HotlineFileDownloadClient.swift:138)
+- **Handshake Format**: HTXF (4) + referenceNumber (4) + 0 (4) + 0 (4) = 16 bytes
+  - Not 20 bytes as initially attempted
+- **DATA Fork Size**: Some servers send DATA fork with size=0 in header
+  - Fall back to file list size (from FileNameWithInfo) when fork header shows 0
+  - Log warning when sizes don't match for debugging
+
+**Files modified:**
+- `src-tauri/src/protocol/client.rs` - Fixed FILP header (24 bytes), added chunked reading with progress callback
+- `src-tauri/src/state/mod.rs` - Added progress event emission with filename
+- `src/components/server/ServerWindow.tsx` - Added progress bar UI with per-file tracking
+
+**Implementation details:**
+- **Progress tracking**: Reads data in 64KB chunks, emits progress every 2% to avoid UI stuttering
+- **Multiple downloads**: Each file tracked independently by filename in Map
+- **Progress events**: Emit `download-progress-{serverId}` with fileName, bytesRead, totalBytes, progress%
+- **UI feedback**: Progress bar appears inline, replaces Download button during transfer
+- **Fork handling**: INFO fork read and skipped, DATA fork saved to Downloads folder, MACR fork skipped
+
+**Testing status:**
+- ✅ Successfully downloaded multiple files (24MB and 31MB video files tested)
+- ✅ Progress indicator shows smooth 0-100% progress
+- ✅ Multiple simultaneous downloads work independently
+- ✅ Files saved to Downloads folder and playable
+
+**Next task:** Choose next feature from porting guide
+
+---
 
 ### Future: Tracker Features
 
