@@ -29,6 +29,7 @@ pub fn run() {
             commands::connect_to_server,
             commands::disconnect_from_server,
             commands::send_chat_message,
+            commands::send_private_message,
             commands::get_message_board,
             commands::post_message_board,
             commands::get_file_list,

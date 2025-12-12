@@ -425,6 +425,51 @@ _No features currently in progress._
 
 **Next task:** File uploads or other features from porting guide
 
+### 2025-12-12: Private Messaging Implementation
+
+**What was completed:**
+- Private message sending to individual users (Transaction 108)
+- Private message receiving via ServerMessage transaction (Transaction 104)
+- MessageDialog component with chat-style UI
+- Double-click user to open private message dialog
+- Message history tracking (incoming/outgoing)
+- Auto-scroll to latest message
+- Per-user message filtering
+
+**Files created/modified:**
+- `src-tauri/src/protocol/client/mod.rs` - Added PrivateMessage event to HotlineEvent enum, updated ServerMessage handler to differentiate private vs broadcast
+- `src-tauri/src/protocol/client/chat.rs` - Added send_private_message() method
+- `src-tauri/src/state/mod.rs` - Added PrivateMessage event forwarding and send_private_message() state method
+- `src-tauri/src/commands/mod.rs` - Added send_private_message Tauri command
+- `src-tauri/src/lib.rs` - Registered send_private_message command
+- `src/components/server/MessageDialog.tsx` - NEW: Private message dialog component
+- `src/components/server/ServerWindow.tsx` - Added double-click handler on user list items and MessageDialog rendering
+
+**Implementation details:**
+- **SendInstantMessage (108)**: Sends private message with userID, options (1), and message data
+- **ServerMessage (104)**: Receives both server broadcasts and private messages
+  - Presence of userID field indicates private message from specific user
+  - Absence of userID field indicates server broadcast message
+- **Event filtering**: Frontend listens to `private-message-{serverId}` events and filters by userId
+- **UI Design**: Modal dialog with chat bubbles (blue for outgoing, gray for incoming)
+- **User interaction**: Double-click any user in user list to open message dialog
+- **Message tracking**: Component state manages message history per conversation
+
+**Protocol details:**
+- Transaction 108 fields:
+  - Field 103 (UserId): u16 target user ID
+  - Field 113 (Options): u32 set to 1 for instant messages
+  - Field 101 (Data): String message content
+- Transaction 104 differentiation:
+  - With Field 103: Private message from userId
+  - Without Field 103: Server broadcast message
+
+**Testing status:**
+- ✅ Code compiles successfully
+- ⏸️ Needs testing with real server and multiple users
+
+**Next task:** Test private messaging functionality with live server
+
 ---
 
 ### Future: Tracker Features
@@ -440,8 +485,8 @@ _No features currently in progress._
 ## Future Feature Enhancements
 
 ### Private Messaging
-- [ ] Send private messages to specific users
-- [ ] Private message windows/dialogs
+- [x] Send private messages to specific users
+- [x] Private message windows/dialogs
 - [ ] Message notifications
 - [ ] Private chat rooms
 - [ ] Chat invitations
@@ -449,7 +494,7 @@ _No features currently in progress._
 ### User Interaction
 - [ ] User info dialog (click user to view full details)
 - [ ] User privileges/flags display
-- [ ] Send private message from user list
+- [x] Send private message from user list
 - [ ] Admin functions (kick, ban, disconnect users)
 - [ ] User context menu (right-click actions)
 

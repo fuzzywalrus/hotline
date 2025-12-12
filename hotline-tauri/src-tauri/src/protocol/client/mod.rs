@@ -26,6 +26,7 @@ use tokio::task::JoinHandle;
 pub enum HotlineEvent {
     ChatMessage { user_id: u16, user_name: String, message: String },
     ServerMessage(String),
+    PrivateMessage { user_id: u16, message: String },
     UserJoined { user_id: u16, user_name: String, icon: u16 },
     UserLeft { user_id: u16 },
     UserChanged { user_id: u16, user_name: String, icon: u16 },
@@ -492,7 +493,16 @@ impl HotlineClient {
                     .and_then(|f| f.to_string().ok())
                     .unwrap_or_default();
 
-                let _ = event_tx.send(HotlineEvent::ServerMessage(message));
+                // Check if this is a private message (has UserId field) or server broadcast
+                if let Some(user_id_field) = transaction.get_field(FieldType::UserId) {
+                    if let Ok(user_id) = user_id_field.to_u16() {
+                        // Private message from a specific user
+                        let _ = event_tx.send(HotlineEvent::PrivateMessage { user_id, message });
+                    }
+                } else {
+                    // Server broadcast message
+                    let _ = event_tx.send(HotlineEvent::ServerMessage(message));
+                }
             }
             TransactionType::NewMessage => {
                 // New message board post notification

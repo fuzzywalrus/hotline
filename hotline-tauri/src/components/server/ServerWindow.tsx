@@ -1,6 +1,12 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import MessageDialog from '../chat/MessageDialog';
+import UserList from '../users/UserList';
+import ChatTab from '../chat/ChatTab';
+import BoardTab from '../board/BoardTab';
+import FilesTab from '../files/FilesTab';
+import NewsTab from '../news/NewsTab';
 
 interface ChatMessage {
   userId: number;
@@ -13,6 +19,12 @@ interface User {
   userId: number;
   userName: string;
   iconId: number;
+}
+
+interface PrivateMessage {
+  text: string;
+  isOutgoing: boolean;
+  timestamp: Date;
 }
 
 interface FileItem {
@@ -71,7 +83,9 @@ export default function ServerWindow({ serverId, serverName, onClose }: ServerWi
   const [composerTitle, setComposerTitle] = useState('');
   const [composerBody, setComposerBody] = useState('');
   const [postingNews, setPostingNews] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [messageDialogUser, setMessageDialogUser] = useState<User | null>(null);
+  const [unreadCounts, setUnreadCounts] = useState<Map<number, number>>(new Map());
+  const [privateMessageHistory, setPrivateMessageHistory] = useState<Map<number, PrivateMessage[]>>(new Map());
 
   // Listen for incoming chat messages
   useEffect(() => {
@@ -137,7 +151,7 @@ export default function ServerWindow({ serverId, serverName, onClose }: ServerWi
   useEffect(() => {
     const unlisten = listen<{ message: string }>(
       `message-board-post-${serverId}`,
-      (event) => {
+      () => {
         // Refresh the board when a new post arrives
         invoke<string[]>('get_message_board', {
           serverId,
@@ -198,10 +212,43 @@ export default function ServerWindow({ serverId, serverName, onClose }: ServerWi
     };
   }, [serverId]);
 
-  // Auto-scroll to bottom when new messages arrive
+  // Listen for private messages to track unread counts and store history
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    const unlisten = listen<{ userId: number; message: string }>(
+      `private-message-${serverId}`,
+      (event) => {
+        const { userId, message } = event.payload;
+
+        // Store message in history
+        setPrivateMessageHistory((prev) => {
+          const newHistory = new Map(prev);
+          const userMessages = newHistory.get(userId) || [];
+          newHistory.set(userId, [
+            ...userMessages,
+            {
+              text: message,
+              isOutgoing: false,
+              timestamp: new Date(),
+            },
+          ]);
+          return newHistory;
+        });
+
+        // Only increment unread count if dialog is not open for this user
+        if (!messageDialogUser || messageDialogUser.userId !== userId) {
+          setUnreadCounts((prev) => {
+            const newCounts = new Map(prev);
+            newCounts.set(userId, (newCounts.get(userId) || 0) + 1);
+            return newCounts;
+          });
+        }
+      }
+    );
+
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, [serverId, messageDialogUser]);
 
   // Listen for download progress events
   useEffect(() => {
@@ -217,6 +264,45 @@ export default function ServerWindow({ serverId, serverName, onClose }: ServerWi
       unlisten.then((fn) => fn());
     };
   }, [serverId]);
+
+  const handleOpenMessageDialog = (user: User) => {
+    // Reset unread count for this user
+    setUnreadCounts((prev) => {
+      const newCounts = new Map(prev);
+      newCounts.delete(user.userId);
+      return newCounts;
+    });
+    // Open the dialog
+    setMessageDialogUser(user);
+  };
+
+  const handleSendPrivateMessage = async (userId: number, message: string) => {
+    try {
+      await invoke('send_private_message', {
+        serverId,
+        userId,
+        message,
+      });
+
+      // Store message in history
+      setPrivateMessageHistory((prev) => {
+        const newHistory = new Map(prev);
+        const userMessages = newHistory.get(userId) || [];
+        newHistory.set(userId, [
+          ...userMessages,
+          {
+            text: message,
+            isOutgoing: true,
+            timestamp: new Date(),
+          },
+        ]);
+        return newHistory;
+      });
+    } catch (error) {
+      console.error('Failed to send private message:', error);
+      throw error;
+    }
+  };
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -271,6 +357,40 @@ export default function ServerWindow({ serverId, serverName, onClose }: ServerWi
       alert(`Failed to post to board: ${error}`);
     } finally {
       setPostingBoard(false);
+    }
+  };
+
+  const handleDownloadFile = async (fileName: string, fileSize: number) => {
+    try {
+      // Initialize progress for this file
+      setDownloadProgress((prev) => new Map(prev).set(fileName, 0));
+
+      const result = await invoke<string>('download_file', {
+        serverId,
+        path: currentPath,
+        fileName,
+        fileSize,
+      });
+
+      // Remove this file from progress map
+      setDownloadProgress((prev) => {
+        const next = new Map(prev);
+        next.delete(fileName);
+        return next;
+      });
+
+      alert(`✅ ${result}`);
+    } catch (error) {
+      console.error('Download failed:', error);
+
+      // Remove this file from progress map on error
+      setDownloadProgress((prev) => {
+        const next = new Map(prev);
+        next.delete(fileName);
+        return next;
+      });
+
+      alert(`❌ Download failed: ${error}`);
     }
   };
 
@@ -409,24 +529,11 @@ export default function ServerWindow({ serverId, serverName, onClose }: ServerWi
       {/* Main content */}
       <div className="flex-1 flex overflow-hidden">
         {/* Sidebar - User list */}
-        <div className="w-48 bg-gray-50 dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 p-4">
-          <h2 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2">
-            Users ({users.length})
-          </h2>
-          <div className="space-y-1">
-            {users.map((user) => (
-              <div
-                key={user.userId}
-                className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 py-1"
-              >
-                <div className="w-4 h-4 bg-gray-300 dark:bg-gray-600 rounded flex items-center justify-center text-xs">
-                  {user.iconId}
-                </div>
-                <span className="truncate">{user.userName}</span>
-              </div>
-            ))}
-          </div>
-        </div>
+        <UserList
+          users={users}
+          unreadCounts={unreadCounts}
+          onUserClick={handleOpenMessageDialog}
+        />
 
         {/* Main area with tabs */}
         <div className="flex-1 flex flex-col">
@@ -476,402 +583,75 @@ export default function ServerWindow({ serverId, serverName, onClose }: ServerWi
 
           {/* Chat view */}
           {activeTab === 'chat' && (
-            <div className="flex-1 flex flex-col">
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-2">
-            {messages.length === 0 ? (
-              <div className="text-sm text-gray-500 dark:text-gray-400 text-center">
-                Connected to {serverName}
-              </div>
-            ) : (
-              messages.map((msg, index) => {
-                const isOwnMessage = msg.userName === 'Me';
-                return (
-                  <div key={index} className="text-sm">
-                    <span className={`font-semibold ${
-                      isOwnMessage
-                        ? 'text-green-600 dark:text-green-400'
-                        : 'text-blue-600 dark:text-blue-400'
-                    }`}>
-                      {msg.userName}:
-                    </span>{' '}
-                    <span className="text-gray-900 dark:text-gray-100">
-                      {msg.message}
-                    </span>
-                  </div>
-                );
-              })
-            )}
-            <div ref={messagesEndRef} />
-          </div>
-
-          {/* Message input */}
-          <form onSubmit={handleSendMessage} className="border-t border-gray-200 dark:border-gray-700 p-4">
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                placeholder="Type a message..."
-                disabled={sending}
-                className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-              />
-              <button
-                type="submit"
-                disabled={!message.trim() || sending}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-md font-medium disabled:cursor-not-allowed"
-              >
-                {sending ? 'Sending...' : 'Send'}
-              </button>
-            </div>
-          </form>
-            </div>
+            <ChatTab
+              serverName={serverName}
+              messages={messages}
+              message={message}
+              sending={sending}
+              onMessageChange={setMessage}
+              onSendMessage={handleSendMessage}
+            />
           )}
 
           {/* Board view */}
           {activeTab === 'board' && (
-            <div className="flex-1 flex flex-col">
-              {/* Posts list */}
-              <div className="flex-1 overflow-y-auto p-4">
-                {loadingBoard ? (
-                  <div className="text-sm text-gray-500 dark:text-gray-400 text-center py-8">
-                    Loading message board...
-                  </div>
-                ) : boardPosts.length === 0 ? (
-                  <div className="text-sm text-gray-500 dark:text-gray-400 text-center py-8">
-                    No posts on message board
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {boardPosts.map((post, index) => (
-                      <div
-                        key={index}
-                        className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700"
-                      >
-                        <pre className="text-sm text-gray-900 dark:text-gray-100 font-mono whitespace-pre-wrap break-words m-0">
-                          {post}
-                        </pre>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Post composer */}
-              <form onSubmit={handlePostBoard} className="border-t border-gray-200 dark:border-gray-700 p-4">
-                <div className="flex flex-col gap-2">
-                  <textarea
-                    value={boardMessage}
-                    onChange={(e) => setBoardMessage(e.target.value)}
-                    placeholder="Write a message to the board..."
-                    disabled={postingBoard}
-                    rows={3}
-                    className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 resize-none"
-                  />
-                  <div className="flex justify-end">
-                    <button
-                      type="submit"
-                      disabled={!boardMessage.trim() || postingBoard}
-                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-md font-medium disabled:cursor-not-allowed"
-                    >
-                      {postingBoard ? 'Posting...' : 'Post to Board'}
-                    </button>
-                  </div>
-                </div>
-              </form>
-            </div>
+            <BoardTab
+              boardPosts={boardPosts}
+              loadingBoard={loadingBoard}
+              boardMessage={boardMessage}
+              postingBoard={postingBoard}
+              onBoardMessageChange={setBoardMessage}
+              onPostBoard={handlePostBoard}
+            />
           )}
 
           {/* News view */}
           {activeTab === 'news' && (
-            <div className="flex-1 flex">
-              {/* Left panel: Categories and Articles */}
-              <div className="w-1/2 border-r border-gray-200 dark:border-gray-700 flex flex-col">
-                {/* Path breadcrumb */}
-                <div className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-2 flex items-center gap-2">
-                  <button
-                    onClick={() => setNewsPath([])}
-                    className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
-                  >
-                    News
-                  </button>
-                  {newsPath.map((segment, index) => (
-                    <span key={index} className="flex items-center gap-2">
-                      <span className="text-gray-400 dark:text-gray-500">/</span>
-                      <button
-                        onClick={() => setNewsPath(newsPath.slice(0, index + 1))}
-                        className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
-                      >
-                        {segment}
-                      </button>
-                    </span>
-                  ))}
-                  {newsPath.length > 0 && (
-                    <button
-                      onClick={handleNewsBack}
-                      className="ml-auto text-sm text-blue-600 dark:text-blue-400 hover:underline"
-                    >
-                      ← Back
-                    </button>
-                  )}
-                </div>
-
-                {/* Categories list */}
-                {newsCategories.length > 0 && (
-                  <div className="border-b border-gray-200 dark:border-gray-700">
-                    <div className="px-4 py-2 bg-gray-100 dark:bg-gray-800 text-xs font-semibold text-gray-600 dark:text-gray-400">
-                      CATEGORIES
-                    </div>
-                    <div className="divide-y divide-gray-200 dark:divide-gray-700">
-                      {newsCategories.map((category, index) => (
-                        <button
-                          key={index}
-                          onClick={() => handleNavigateNews(category)}
-                          className="w-full px-4 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                              📁 {category.name}
-                            </span>
-                            <span className="text-xs text-gray-500 dark:text-gray-400">
-                              {category.count} {category.count === 1 ? 'item' : 'items'}
-                            </span>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Articles list */}
-                <div className="flex-1 overflow-y-auto">
-                  {loadingNews ? (
-                    <div className="text-sm text-gray-500 dark:text-gray-400 text-center py-8">
-                      Loading news...
-                    </div>
-                  ) : newsArticles.length === 0 ? (
-                    <div className="text-sm text-gray-500 dark:text-gray-400 text-center py-8">
-                      No articles in this category
-                    </div>
-                  ) : (
-                    <div className="divide-y divide-gray-200 dark:divide-gray-700">
-                      {newsArticles.map((article) => (
-                        <button
-                          key={article.id}
-                          onClick={() => handleSelectArticle(article)}
-                          className={`w-full px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${
-                            selectedArticle?.id === article.id ? 'bg-blue-50 dark:bg-blue-900/20' : ''
-                          }`}
-                        >
-                          <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                            {article.title}
-                          </div>
-                          <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                            by {article.poster}
-                            {article.parent_id > 0 && <span className="ml-2 text-blue-600 dark:text-blue-400">↳ Reply</span>}
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Post button */}
-                <div className="border-t border-gray-200 dark:border-gray-700 p-4">
-                  <button
-                    onClick={() => setShowComposer(!showComposer)}
-                    className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium"
-                  >
-                    {showComposer ? 'Cancel' : selectedArticle ? 'Reply to Article' : 'Post Article'}
-                  </button>
-                </div>
-              </div>
-
-              {/* Right panel: Article viewer or composer */}
-              <div className="w-1/2 flex flex-col">
-                {showComposer ? (
-                  /* Composer */
-                  <form onSubmit={handlePostNews} className="flex-1 flex flex-col p-4">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-                      {selectedArticle ? `Reply to: ${selectedArticle.title}` : 'Post New Article'}
-                    </h3>
-                    <input
-                      type="text"
-                      value={composerTitle}
-                      onChange={(e) => setComposerTitle(e.target.value)}
-                      placeholder="Article title..."
-                      className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
-                    />
-                    <textarea
-                      value={composerBody}
-                      onChange={(e) => setComposerBody(e.target.value)}
-                      placeholder="Article content..."
-                      rows={20}
-                      className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none mb-4"
-                    />
-                    <button
-                      type="submit"
-                      disabled={!composerTitle.trim() || !composerBody.trim() || postingNews}
-                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-md font-medium disabled:cursor-not-allowed"
-                    >
-                      {postingNews ? 'Posting...' : 'Post'}
-                    </button>
-                  </form>
-                ) : selectedArticle ? (
-                  /* Article viewer */
-                  <div className="flex-1 flex flex-col overflow-hidden">
-                    <div className="border-b border-gray-200 dark:border-gray-700 p-4 bg-gray-50 dark:bg-gray-800">
-                      <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                        {selectedArticle.title}
-                      </h2>
-                      <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                        by {selectedArticle.poster}
-                      </div>
-                    </div>
-                    <div className="flex-1 overflow-y-auto p-4">
-                      <pre className="text-sm text-gray-900 dark:text-gray-100 font-mono whitespace-pre-wrap break-words">
-                        {articleContent}
-                      </pre>
-                    </div>
-                  </div>
-                ) : (
-                  /* No article selected */
-                  <div className="flex-1 flex items-center justify-center text-gray-500 dark:text-gray-400">
-                    Select an article to read
-                  </div>
-                )}
-              </div>
-            </div>
+            <NewsTab
+              newsPath={newsPath}
+              newsCategories={newsCategories}
+              newsArticles={newsArticles}
+              selectedArticle={selectedArticle}
+              articleContent={articleContent}
+              loadingNews={loadingNews}
+              showComposer={showComposer}
+              composerTitle={composerTitle}
+              composerBody={composerBody}
+              postingNews={postingNews}
+              onNewsPathChange={setNewsPath}
+              onNewsBack={handleNewsBack}
+              onNavigateNews={handleNavigateNews}
+              onSelectArticle={handleSelectArticle}
+              onToggleComposer={() => setShowComposer(!showComposer)}
+              onComposerTitleChange={setComposerTitle}
+              onComposerBodyChange={setComposerBody}
+              onPostNews={handlePostNews}
+            />
           )}
 
           {/* Files view */}
           {activeTab === 'files' && (
-            <div className="flex-1 flex flex-col">
-              {/* Path breadcrumb */}
-              <div className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-2 flex items-center gap-2">
-                <button
-                  onClick={() => setCurrentPath([])}
-                  className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
-                >
-                  Root
-                </button>
-                {currentPath.map((folder, index) => (
-                  <span key={index} className="flex items-center gap-2">
-                    <span className="text-gray-400">/</span>
-                    <button
-                      onClick={() => setCurrentPath(currentPath.slice(0, index + 1))}
-                      className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
-                    >
-                      {folder}
-                    </button>
-                  </span>
-                ))}
-              </div>
-
-              {/* File list */}
-              <div className="flex-1 overflow-y-auto p-4">
-                {files.length === 0 ? (
-                  <div className="text-sm text-gray-500 dark:text-gray-400 text-center py-8">
-                    No files
-                  </div>
-                ) : (
-                  <div className="space-y-1">
-                    {files.map((file) => (
-                      <div
-                        key={file.name}
-                        className="flex items-center gap-3 px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded group"
-                      >
-                        <div
-                          className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer"
-                          onDoubleClick={(e) => {
-                            e.stopPropagation();
-                            if (file.isFolder) {
-                              console.log('Double-clicked folder:', file.name);
-                              setCurrentPath((prev) => [...prev, file.name]);
-                            }
-                          }}
-                        >
-                          <div className="w-6 h-6 flex items-center justify-center text-lg">
-                            {file.isFolder ? '📁' : '📄'}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                              {file.name}
-                            </div>
-                            {!file.isFolder && (
-                              <div className="text-xs text-gray-500 dark:text-gray-400">
-                                {file.size >= 1024 * 1024
-                                  ? `${(file.size / 1024 / 1024).toFixed(2)} MB`
-                                  : `${(file.size / 1024).toFixed(1)} KB`}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        {!file.isFolder && (
-                          <div className="flex items-center gap-2">
-                            {downloadProgress.has(file.name) && downloadProgress.get(file.name)! < 100 ? (
-                              <div className="flex items-center gap-2">
-                                <div className="w-24 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                                  <div
-                                    className="h-full bg-blue-600 transition-all duration-300"
-                                    style={{ width: `${downloadProgress.get(file.name)}%` }}
-                                  />
-                                </div>
-                                <span className="text-xs text-gray-600 dark:text-gray-400">
-                                  {downloadProgress.get(file.name)}%
-                                </span>
-                              </div>
-                            ) : (
-                              <button
-                                onClick={async () => {
-                                  try {
-                                    // Initialize progress for this file
-                                    setDownloadProgress((prev) => new Map(prev).set(file.name, 0));
-
-                                    const result = await invoke<string>('download_file', {
-                                      serverId,
-                                      path: currentPath,
-                                      fileName: file.name,
-                                      fileSize: file.size,
-                                    });
-
-                                    // Remove this file from progress map
-                                    setDownloadProgress((prev) => {
-                                      const next = new Map(prev);
-                                      next.delete(file.name);
-                                      return next;
-                                    });
-
-                                    alert(`✅ ${result}`);
-                                  } catch (error) {
-                                    console.error('Download failed:', error);
-
-                                    // Remove this file from progress map on error
-                                    setDownloadProgress((prev) => {
-                                      const next = new Map(prev);
-                                      next.delete(file.name);
-                                      return next;
-                                    });
-
-                                    alert(`❌ Download failed: ${error}`);
-                                  }
-                                }}
-                                className="opacity-0 group-hover:opacity-100 px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded transition-opacity"
-                              >
-                                Download
-                              </button>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
+            <FilesTab
+              files={files}
+              currentPath={currentPath}
+              downloadProgress={downloadProgress}
+              onPathChange={setCurrentPath}
+              onDownloadFile={handleDownloadFile}
+            />
           )}
         </div>
       </div>
+
+      {/* Message Dialog */}
+      {messageDialogUser && (
+        <MessageDialog
+          userId={messageDialogUser.userId}
+          userName={messageDialogUser.userName}
+          messages={privateMessageHistory.get(messageDialogUser.userId) || []}
+          onSendMessage={handleSendPrivateMessage}
+          onClose={() => setMessageDialogUser(null)}
+        />
+      )}
     </div>
   );
 }

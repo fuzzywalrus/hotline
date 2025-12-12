@@ -33,6 +33,17 @@ pub async fn send_chat_message(
 }
 
 #[tauri::command]
+pub async fn send_private_message(
+    server_id: String,
+    user_id: u16,
+    message: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    println!("Command: send_private_message to user {} on {}: {}", user_id, server_id, message);
+    state.send_private_message(&server_id, user_id, message).await
+}
+
+#[tauri::command]
 pub async fn get_message_board(
     server_id: String,
     state: State<'_, AppState>,
