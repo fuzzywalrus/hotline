@@ -8,6 +8,17 @@ interface ServerInfo {
   port: number;
 }
 
+interface FileItem {
+  name: string;
+  size: number;
+  isFolder: boolean;
+  fileType?: string;
+  creator?: string;
+}
+
+// File cache key is the path joined with '/'
+type FileCache = Map<string, FileItem[]>;
+
 interface AppState {
   // Tracker bookmarks
   bookmarks: Bookmark[];
@@ -17,6 +28,9 @@ interface AppState {
   activeServers: string[];
   serverInfo: Map<string, ServerInfo>;
   focusedServer: string | null;
+
+  // File cache per server
+  fileCache: Map<string, FileCache>;
 
   // UI state
   showAbout: boolean;
@@ -37,6 +51,12 @@ interface AppState {
 
   setShowAbout: (show: boolean) => void;
   setShowUpdate: (show: boolean) => void;
+
+  // File cache actions
+  setFileCache: (serverId: string, path: string[], files: FileItem[]) => void;
+  getFileCache: (serverId: string, path: string[]) => FileItem[] | null;
+  clearFileCache: (serverId: string) => void;
+  clearFileCachePath: (serverId: string, path: string[]) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -47,6 +67,7 @@ export const useAppStore = create<AppState>((set) => ({
   focusedServer: null,
   showAbout: false,
   showUpdate: false,
+  fileCache: new Map(),
 
   addBookmark: (bookmark) => set((state) => {
     // Check if bookmark already exists to prevent duplicates
@@ -100,4 +121,38 @@ export const useAppStore = create<AppState>((set) => ({
 
   setShowAbout: (show) => set({ showAbout: show }),
   setShowUpdate: (show) => set({ showUpdate: show }),
+
+  // File cache actions
+  setFileCache: (serverId, path, files) => set((state) => {
+    const cache = state.fileCache.get(serverId) || new Map();
+    const pathKey = path.join('/');
+    cache.set(pathKey, files);
+    const newCache = new Map(state.fileCache);
+    newCache.set(serverId, cache);
+    return { fileCache: newCache };
+  }),
+
+  getFileCache: (serverId: string, path: string[]): FileItem[] | null => {
+    const cache = useAppStore.getState().fileCache.get(serverId);
+    if (!cache) return null;
+    const pathKey = path.join('/');
+    return cache.get(pathKey) || null;
+  },
+
+  clearFileCache: (serverId) => set((state) => {
+    const newCache = new Map(state.fileCache);
+    newCache.delete(serverId);
+    return { fileCache: newCache };
+  }),
+
+  clearFileCachePath: (serverId, path) => set((state) => {
+    const cache = state.fileCache.get(serverId);
+    if (!cache) return state;
+    const pathKey = path.join('/');
+    const newCache = new Map(cache);
+    newCache.delete(pathKey);
+    const newFileCache = new Map(state.fileCache);
+    newFileCache.set(serverId, newCache);
+    return { fileCache: newFileCache };
+  }),
 }));

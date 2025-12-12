@@ -34,6 +34,7 @@ pub fn run() {
             commands::post_message_board,
             commands::get_file_list,
             commands::download_file,
+            commands::upload_file,
             commands::get_news_categories,
             commands::get_news_articles,
             commands::get_news_article_data,

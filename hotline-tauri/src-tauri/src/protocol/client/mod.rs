@@ -31,8 +31,9 @@ pub enum HotlineEvent {
     UserLeft { user_id: u16 },
     UserChanged { user_id: u16, user_name: String, icon: u16, flags: u16 },
     AgreementRequired(String),
-    FileList { files: Vec<FileInfo> },
+    FileList { files: Vec<FileInfo>, path: Vec<String> },
     NewMessageBoardPost(String),
+    StatusChanged(ConnectionStatus),
 }
 
 #[derive(Debug, Clone)]
@@ -61,6 +62,9 @@ pub struct HotlineClient {
     // Pending transactions (for request/reply pattern)
     pending_transactions: Arc<RwLock<HashMap<u32, mpsc::Sender<Transaction>>>>,
 
+    // Track file list paths by transaction ID
+    file_list_paths: Arc<RwLock<HashMap<u32, Vec<String>>>>,
+
     // Server info (extracted from login reply)
     server_info: Arc<Mutex<Option<ServerInfo>>>,
 
@@ -81,6 +85,7 @@ impl HotlineClient {
             read_half: Arc::new(Mutex::new(None)),
             write_half: Arc::new(Mutex::new(None)),
             transaction_counter: Arc::new(AtomicU32::new(1)),
+            file_list_paths: Arc::new(RwLock::new(HashMap::new())),
             server_info: Arc::new(Mutex::new(None)),
             running: Arc::new(AtomicBool::new(false)),
             event_tx,
@@ -107,6 +112,7 @@ impl HotlineClient {
         {
             let mut status = self.status.lock().await;
             *status = ConnectionStatus::Connecting;
+            let _ = self.event_tx.send(HotlineEvent::StatusChanged(ConnectionStatus::Connecting));
         }
 
         // Connect TCP
@@ -132,6 +138,7 @@ impl HotlineClient {
         {
             let mut status = self.status.lock().await;
             *status = ConnectionStatus::Connected;
+            let _ = self.event_tx.send(HotlineEvent::StatusChanged(ConnectionStatus::Connected));
         }
 
         // Perform handshake
@@ -209,6 +216,7 @@ impl HotlineClient {
         {
             let mut status = self.status.lock().await;
             *status = ConnectionStatus::LoggingIn;
+            let _ = self.event_tx.send(HotlineEvent::StatusChanged(ConnectionStatus::LoggingIn));
         }
 
         // Build login transaction
@@ -337,6 +345,7 @@ impl HotlineClient {
         {
             let mut status = self.status.lock().await;
             *status = ConnectionStatus::LoggedIn;
+            let _ = self.event_tx.send(HotlineEvent::StatusChanged(ConnectionStatus::LoggedIn));
         }
 
         println!("Login successful!");
@@ -374,6 +383,7 @@ impl HotlineClient {
 
         let mut status = self.status.lock().await;
         *status = ConnectionStatus::Disconnected;
+        let _ = self.event_tx.send(HotlineEvent::StatusChanged(ConnectionStatus::Disconnected));
 
         println!("Disconnected");
 
@@ -394,6 +404,7 @@ impl HotlineClient {
         let running = self.running.clone();
         let event_tx = self.event_tx.clone();
         let pending_transactions = self.pending_transactions.clone();
+        let file_list_paths = self.file_list_paths.clone();
 
         let task = tokio::spawn(async move {
             while running.load(Ordering::SeqCst) {
@@ -488,7 +499,17 @@ impl HotlineClient {
 
                     // Send file list event if we parsed any files
                     if has_file_info {
-                        let _ = event_tx.send(HotlineEvent::FileList { files });
+                        // Get the path for this transaction
+                        let path = {
+                            let paths = file_list_paths.read().await;
+                            paths.get(&transaction.id).cloned().unwrap_or_default()
+                        };
+                        // Remove the path from tracking
+                        {
+                            let mut paths = file_list_paths.write().await;
+                            paths.remove(&transaction.id);
+                        }
+                        let _ = event_tx.send(HotlineEvent::FileList { files, path });
                     }
 
                     // If it's not a user/file list reply, forward to pending transaction handlers
