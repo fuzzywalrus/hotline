@@ -12,7 +12,8 @@
       "Bash(pkill:*)",
       "Bash(npm uninstall:*)",
       "Bash(test -f:*)",
-      "Bash(cargo check:*)"
+      "Bash(cargo check:*)",
+      "Bash(find:*)"
     ]
   }
 }
