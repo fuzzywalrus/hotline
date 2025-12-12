@@ -38,15 +38,46 @@ impl AppState {
     }
 
     fn load_bookmarks(path: &PathBuf) -> Result<Vec<Bookmark>, String> {
-        if !path.exists() {
-            return Ok(Vec::new());
+        let mut bookmarks = if !path.exists() {
+            Vec::new()
+        } else {
+            let data = fs::read_to_string(path)
+                .map_err(|e| format!("Failed to read bookmarks: {}", e))?;
+
+            serde_json::from_str(&data)
+                .map_err(|e| format!("Failed to parse bookmarks: {}", e))?
+        };
+
+        // Ensure default tracker bookmark exists
+        let default_tracker_address = "hltracker.com";
+        let default_tracker_port = 5498u16;
+        
+        let has_default_tracker = bookmarks.iter().any(|b: &Bookmark| {
+            b.address == default_tracker_address 
+            && b.port == default_tracker_port
+            && matches!(b.bookmark_type, Some(crate::protocol::types::BookmarkType::Tracker))
+        });
+
+        if !has_default_tracker {
+            let default_tracker = Bookmark {
+                id: "default-tracker-hltracker".to_string(),
+                name: "Featured Servers".to_string(),
+                address: default_tracker_address.to_string(),
+                port: default_tracker_port,
+                login: "guest".to_string(),
+                password: None,
+                icon: None,
+                auto_connect: false,
+                bookmark_type: Some(crate::protocol::types::BookmarkType::Tracker),
+            };
+            bookmarks.insert(0, default_tracker);
+            
+            // Save updated bookmarks to disk
+            let json = serde_json::to_string_pretty(&bookmarks)
+                .map_err(|e| format!("Failed to serialize bookmarks: {}", e))?;
+            fs::write(path, json)
+                .map_err(|e| format!("Failed to write bookmarks: {}", e))?;
         }
-
-        let data = fs::read_to_string(path)
-            .map_err(|e| format!("Failed to read bookmarks: {}", e))?;
-
-        let bookmarks: Vec<Bookmark> = serde_json::from_str(&data)
-            .map_err(|e| format!("Failed to parse bookmarks: {}", e))?;
 
         Ok(bookmarks)
     }
@@ -62,6 +93,11 @@ impl AppState {
     }
 
     pub async fn connect_server(&self, bookmark: Bookmark, username: String, user_icon_id: u16) -> Result<String, String> {
+        // Don't allow connecting to trackers - they use a different protocol
+        if matches!(bookmark.bookmark_type, Some(crate::protocol::types::BookmarkType::Tracker)) {
+            return Err("Cannot connect to tracker. Trackers are used to browse servers, not to connect directly.".to_string());
+        }
+
         let server_id = bookmark.id.clone();
         let client = HotlineClient::new(bookmark);
         client.set_user_info(username, user_icon_id).await;

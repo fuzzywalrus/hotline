@@ -1,5 +1,7 @@
 // Core Hotline types
 
+export type BookmarkType = 'server' | 'tracker';
+
 export interface Bookmark {
   id: string;
   name: string;
@@ -9,6 +11,7 @@ export interface Bookmark {
   password?: string;
   icon?: number;
   autoConnect?: boolean;
+  type?: BookmarkType; // 'server' by default, 'tracker' for tracker servers
 }
 
 export interface TrackerBookmark {

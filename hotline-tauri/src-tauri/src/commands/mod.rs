@@ -1,6 +1,7 @@
 // Tauri commands - these are callable from the frontend
 
 use crate::protocol::types::Bookmark;
+use crate::protocol::tracker::TrackerClient;
 use crate::state::AppState;
 use tauri::State;
 
@@ -211,6 +212,15 @@ pub async fn download_banner(
 }
 
 #[tauri::command]
+pub async fn fetch_tracker_servers(
+    address: String,
+    port: Option<u16>,
+) -> Result<Vec<crate::protocol::types::TrackerServer>, String> {
+    println!("Command: fetch_tracker_servers from {}:{}", address, port.unwrap_or(5498));
+    TrackerClient::fetch_servers(&address, port).await
+}
+
+#[tauri::command]
 pub async fn test_connection(address: String, port: u16) -> Result<String, String> {
     println!("Command: test_connection to {}:{}", address, port);
 
@@ -224,6 +234,7 @@ pub async fn test_connection(address: String, port: u16) -> Result<String, Strin
         password: Some("".to_string()),
         icon: Some(414),
         auto_connect: false,
+        bookmark_type: None,
     };
 
     // Create client and connect

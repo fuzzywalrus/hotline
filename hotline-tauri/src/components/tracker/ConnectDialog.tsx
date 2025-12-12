@@ -15,6 +15,7 @@ export default function ConnectDialog({ onClose }: ConnectDialogProps) {
     port: '5500',
     login: 'guest',
     password: '',
+    type: 'server' as 'server' | 'tracker',
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -27,6 +28,7 @@ export default function ConnectDialog({ onClose }: ConnectDialogProps) {
       port: parseInt(formData.port),
       login: formData.login,
       password: formData.password || undefined,
+      type: formData.type,
     };
 
     try {
@@ -53,14 +55,27 @@ export default function ConnectDialog({ onClose }: ConnectDialogProps) {
         <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Server Name
+              Type
+            </label>
+            <select
+              value={formData.type}
+              onChange={(e) => setFormData({ ...formData, type: e.target.value as 'server' | 'tracker', port: e.target.value === 'tracker' ? '5498' : '5500' })}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="server">Server</option>
+              <option value="tracker">Tracker</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              {formData.type === 'tracker' ? 'Tracker Name' : 'Server Name'}
             </label>
             <input
               type="text"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="My Server"
+              placeholder={formData.type === 'tracker' ? 'My Tracker' : 'My Server'}
             />
           </div>
 
@@ -90,29 +105,33 @@ export default function ConnectDialog({ onClose }: ConnectDialogProps) {
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Login
-            </label>
-            <input
-              type="text"
-              value={formData.login}
-              onChange={(e) => setFormData({ ...formData, login: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
+          {formData.type === 'server' && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Login
+                </label>
+                <input
+                  type="text"
+                  value={formData.login}
+                  onChange={(e) => setFormData({ ...formData, login: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Password
-            </label>
-            <input
-              type="password"
-              value={formData.password}
-              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Password
+                </label>
+                <input
+                  type="password"
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </>
+          )}
 
           <div className="flex gap-3 pt-4">
             <button
