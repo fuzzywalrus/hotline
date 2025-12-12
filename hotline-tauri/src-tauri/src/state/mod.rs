@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::RwLock;
 
 pub struct AppState {
@@ -171,16 +171,54 @@ impl AppState {
         }
     }
 
-    pub async fn download_file(&self, server_id: &str, path: Vec<String>, file_name: String) -> Result<String, String> {
+    pub async fn download_file(&self, server_id: &str, path: Vec<String>, file_name: String, file_size: u32) -> Result<String, String> {
         let clients = self.clients.read().await;
 
         if let Some(client) = clients.get(server_id) {
             // Get reference number from server
             let reference_number = client.download_file(path, file_name.clone()).await?;
 
-            // TODO: Implement actual file transfer
-            // For now, just return success message
-            Ok(format!("Download initiated (ref: {})", reference_number))
+            println!("Got reference number {}, starting file transfer...", reference_number);
+
+            // Perform the file transfer with progress callback
+            let app_handle = self.app_handle.clone();
+            let server_id_clone = server_id.to_string();
+            let file_name_clone = file_name.clone();
+            let file_data = client.perform_file_transfer(
+                reference_number,
+                file_size,
+                move |bytes_read, total_bytes| {
+                    let progress = (bytes_read as f64 / total_bytes as f64 * 100.0) as u32;
+                    let payload = serde_json::json!({
+                        "fileName": file_name_clone,
+                        "bytesRead": bytes_read,
+                        "totalBytes": total_bytes,
+                        "progress": progress,
+                    });
+                    let _ = app_handle.emit(&format!("download-progress-{}", server_id_clone), payload);
+                }
+            ).await?;
+
+            println!("File transfer complete, {} bytes received", file_data.len());
+
+            // Get downloads directory
+            let downloads_dir = self.app_handle
+                .path()
+                .download_dir()
+                .map_err(|e| format!("Failed to get downloads directory: {}", e))?;
+
+            // Create full file path
+            let file_path = downloads_dir.join(&file_name);
+
+            println!("Saving file to: {:?}", file_path);
+
+            // Save file to disk
+            fs::write(&file_path, file_data)
+                .map_err(|e| format!("Failed to write file: {}", e))?;
+
+            println!("File saved successfully to {:?}", file_path);
+
+            Ok(format!("Downloaded to: {}", file_path.display()))
         } else {
             Err("Server not connected".to_string())
         }

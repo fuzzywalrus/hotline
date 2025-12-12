@@ -3,6 +3,7 @@
 // Protocol identifiers
 pub const PROTOCOL_ID: &[u8; 4] = b"TRTP";
 pub const SUBPROTOCOL_ID: &[u8; 4] = b"HOTL";
+pub const FILE_TRANSFER_ID: &[u8; 4] = b"HTXF";
 pub const PROTOCOL_VERSION: u16 = 0x0001;
 pub const PROTOCOL_SUBVERSION: u16 = 0x0002;
 
