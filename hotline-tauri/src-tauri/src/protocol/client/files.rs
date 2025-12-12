@@ -12,7 +12,14 @@ impl HotlineClient {
     pub async fn get_file_list(&self, path: Vec<String>) -> Result<(), String> {
         println!("Requesting file list for path: {:?}", path);
 
-        let mut transaction = Transaction::new(self.next_transaction_id(), TransactionType::GetFileNameList);
+        let transaction_id = self.next_transaction_id();
+        let mut transaction = Transaction::new(transaction_id, TransactionType::GetFileNameList);
+        
+        // Store the path for this transaction
+        {
+            let mut paths = self.file_list_paths.write().await;
+            paths.insert(transaction_id, path.clone());
+        }
 
         // Encode path as FilePath field
         // FilePath format: 2 bytes item count + for each item: 2 bytes (0x0000) + 1 byte name length + name
@@ -518,5 +525,235 @@ impl HotlineClient {
         println!("Banner download complete: {} bytes received", banner_data.len());
 
         Ok(banner_data)
+    }
+
+    /// Upload a file to the server
+    /// - path: Directory path where the file should be uploaded
+    /// - file_name: Name of the file to upload
+    /// - file_data: The file contents to upload
+    /// - progress_callback: Callback for progress updates (bytes_sent, total_bytes)
+    pub async fn upload_file<F>(
+        &self,
+        path: Vec<String>,
+        file_name: String,
+        file_data: Vec<u8>,
+        mut progress_callback: F,
+    ) -> Result<(), String>
+    where
+        F: FnMut(u32, u32),
+    {
+        println!("Requesting file upload: {} to path {:?}", file_name, path);
+
+        let transaction_id = self.next_transaction_id();
+        let mut transaction = Transaction::new(transaction_id, TransactionType::UploadFile);
+
+        // Add file name field
+        transaction.add_field(TransactionField {
+            field_type: FieldType::FileName,
+            data: file_name.as_bytes().to_vec(),
+        });
+
+        // Add file path field if not root
+        if !path.is_empty() {
+            let mut path_data = Vec::new();
+            path_data.extend_from_slice(&(path.len() as u16).to_be_bytes());
+
+            for folder in &path {
+                path_data.extend_from_slice(&[0x00, 0x00]); // Separator
+                path_data.push(folder.as_bytes().len() as u8); // Name length
+                path_data.extend_from_slice(folder.as_bytes()); // Name
+            }
+
+            transaction.add_field(TransactionField {
+                field_type: FieldType::FilePath,
+                data: path_data,
+            });
+        }
+
+        let encoded = transaction.encode();
+
+        // Create channel to receive reply
+        let (tx, mut rx) = mpsc::channel(1);
+        {
+            let mut pending = self.pending_transactions.write().await;
+            pending.insert(transaction_id, tx);
+        }
+
+        // Send transaction
+        println!("Sending UploadFile transaction...");
+        let mut write_guard = self.write_half.lock().await;
+        let write_stream = write_guard
+            .as_mut()
+            .ok_or("Not connected".to_string())?;
+
+        write_stream
+            .write_all(&encoded)
+            .await
+            .map_err(|e| format!("Failed to send UploadFile: {}", e))?;
+
+        write_stream
+            .flush()
+            .await
+            .map_err(|e| format!("Failed to flush: {}", e))?;
+
+        drop(write_guard);
+
+        // Wait for reply
+        println!("Waiting for UploadFile reply...");
+        let reply = tokio::time::timeout(Duration::from_secs(10), rx.recv())
+            .await
+            .map_err(|_| "Timeout waiting for upload reply".to_string())?
+            .ok_or("Channel closed".to_string())?;
+
+        println!("UploadFile reply received: error_code={}", reply.error_code);
+
+        if reply.error_code != 0 {
+            let error_msg = reply
+                .get_field(FieldType::ErrorText)
+                .and_then(|f| f.to_string().ok())
+                .unwrap_or_else(|| format!("Error code: {}", reply.error_code));
+            return Err(format!("Upload failed: {}", error_msg));
+        }
+
+        // Get reference number from reply
+        let reference_number = reply
+            .get_field(FieldType::ReferenceNumber)
+            .and_then(|f| f.to_u32().ok())
+            .ok_or("No reference number in reply".to_string())?;
+
+        println!("Upload reference number: {}", reference_number);
+
+        // Perform the actual file transfer
+        self.perform_file_upload(reference_number, &file_name, &file_data, &mut progress_callback)
+            .await?;
+
+        Ok(())
+    }
+
+    /// Perform the actual file upload transfer
+    async fn perform_file_upload<F>(
+        &self,
+        reference_number: u32,
+        file_name: &str,
+        file_data: &[u8],
+        progress_callback: &mut F,
+    ) -> Result<(), String>
+    where
+        F: FnMut(u32, u32),
+    {
+        println!("Starting file upload transfer: {} ({} bytes)", file_name, file_data.len());
+
+        // Open a new TCP connection to the server for file transfer
+        let transfer_port = self.bookmark.port + 1;
+        let addr = format!("{}:{}", self.bookmark.address, transfer_port);
+        println!("Connecting to file transfer port: {}", transfer_port);
+
+        let mut transfer_stream = TcpStream::connect(&addr)
+            .await
+            .map_err(|e| format!("Failed to connect for upload transfer: {}", e))?;
+
+        println!("Upload transfer connection established");
+
+        // Calculate total transfer size
+        // FILP header (24) + INFO fork header (16) + INFO fork data (minimal) + DATA fork header (16) + DATA fork data
+        let info_fork_size = 0u32; // Minimal INFO fork for now
+        let data_fork_size = file_data.len() as u32;
+        let total_size = 24 + 16 + info_fork_size + 16 + data_fork_size;
+
+        // Send file transfer handshake
+        // Format: HTXF (4) + reference_number (4) + total_size (4) + 0 (4) = 16 bytes
+        let mut handshake = Vec::with_capacity(16);
+        handshake.extend_from_slice(FILE_TRANSFER_ID); // "HTXF"
+        handshake.extend_from_slice(&reference_number.to_be_bytes());
+        handshake.extend_from_slice(&total_size.to_be_bytes());
+        handshake.extend_from_slice(&0u32.to_be_bytes());
+
+        println!("Sending upload handshake ({} bytes): {:02X?}", handshake.len(), &handshake);
+        transfer_stream
+            .write_all(&handshake)
+            .await
+            .map_err(|e| format!("Failed to send upload handshake: {}", e))?;
+
+        transfer_stream
+            .flush()
+            .await
+            .map_err(|e| format!("Failed to flush handshake: {}", e))?;
+
+        println!("Upload handshake sent");
+
+        // Send FILP header
+        // Format: FILP (4) + version (2) + reserved (16) + fork count (2) = 24 bytes
+        let mut filp_header = Vec::with_capacity(24);
+        filp_header.extend_from_slice(b"FILP"); // Format
+        filp_header.extend_from_slice(&1u16.to_be_bytes()); // Version
+        filp_header.extend_from_slice(&[0u8; 16]); // Reserved
+        filp_header.extend_from_slice(&2u16.to_be_bytes()); // Fork count (INFO + DATA)
+
+        transfer_stream
+            .write_all(&filp_header)
+            .await
+            .map_err(|e| format!("Failed to send FILP header: {}", e))?;
+
+        // Send INFO fork header
+        // Format: Fork type (4) + compression (4) + reserved (4) + data size (4) = 16 bytes
+        let mut info_fork_header = Vec::with_capacity(16);
+        info_fork_header.extend_from_slice(b"INFO"); // Fork type
+        info_fork_header.extend_from_slice(&0u32.to_be_bytes()); // Compression
+        info_fork_header.extend_from_slice(&0u32.to_be_bytes()); // Reserved
+        info_fork_header.extend_from_slice(&info_fork_size.to_be_bytes()); // Data size
+
+        transfer_stream
+            .write_all(&info_fork_header)
+            .await
+            .map_err(|e| format!("Failed to send INFO fork header: {}", e))?;
+
+        // INFO fork data is empty for now
+        // (In a full implementation, this would contain file metadata)
+
+        // Send DATA fork header
+        let mut data_fork_header = Vec::with_capacity(16);
+        data_fork_header.extend_from_slice(b"DATA"); // Fork type
+        data_fork_header.extend_from_slice(&0u32.to_be_bytes()); // Compression
+        data_fork_header.extend_from_slice(&0u32.to_be_bytes()); // Reserved
+        data_fork_header.extend_from_slice(&data_fork_size.to_be_bytes()); // Data size
+
+        transfer_stream
+            .write_all(&data_fork_header)
+            .await
+            .map_err(|e| format!("Failed to send DATA fork header: {}", e))?;
+
+        // Send DATA fork (the actual file data) in chunks with progress tracking
+        let chunk_size = 65536; // 64KB chunks
+        let mut bytes_sent = 0u32;
+        let mut last_reported_progress = 0u32;
+
+        while bytes_sent < data_fork_size {
+            let remaining = data_fork_size - bytes_sent;
+            let to_send = std::cmp::min(remaining, chunk_size) as usize;
+            let chunk = &file_data[bytes_sent as usize..(bytes_sent as usize + to_send)];
+
+            transfer_stream
+                .write_all(chunk)
+                .await
+                .map_err(|e| format!("Failed to send file data: {}", e))?;
+
+            bytes_sent += to_send as u32;
+
+            // Report progress every 2% or on completion
+            let current_progress = (bytes_sent as f64 / data_fork_size as f64 * 100.0) as u32;
+            if current_progress >= last_reported_progress + 2 || bytes_sent == data_fork_size {
+                progress_callback(bytes_sent, data_fork_size);
+                last_reported_progress = current_progress;
+            }
+        }
+
+        transfer_stream
+            .flush()
+            .await
+            .map_err(|e| format!("Failed to flush file data: {}", e))?;
+
+        println!("File upload complete: {} bytes sent", bytes_sent);
+
+        Ok(())
     }
 }

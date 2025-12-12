@@ -1,0 +1,122 @@
+import UserList from '../users/UserList';
+import type { ViewTab, User } from '../server/serverTypes';
+
+interface ServerSidebarProps {
+  activeTab: ViewTab;
+  onTabChange: (tab: ViewTab) => void;
+  users: User[];
+  onUserClick: (user: User) => void;
+  onOpenMessageDialog: (user: User) => void;
+  unreadCounts: Map<number, number>;
+}
+
+export default function ServerSidebar({
+  activeTab,
+  onTabChange,
+  users,
+  onUserClick,
+  onOpenMessageDialog,
+  unreadCounts,
+}: ServerSidebarProps) {
+  return (
+    <div className="w-[200px] bg-gray-50 dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col">
+      {/* Tab navigation */}
+      <div className="flex flex-col gap-1 p-2">
+        <button
+          onClick={() => onTabChange('chat')}
+          className={`flex items-center gap-2 px-2 py-2 rounded transition-colors ${
+            activeTab === 'chat'
+              ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+              : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-200'
+          }`}
+          title="Public Chat"
+        >
+          <img 
+            src="/icons/section-chat.png" 
+            alt="Chat" 
+            className="w-5 h-5"
+            onError={(e) => {
+              const target = e.target as HTMLImageElement;
+              target.style.display = 'none';
+            }}
+          />
+          <span className="text-sm font-medium">Chat</span>
+        </button>
+        <button
+          onClick={() => onTabChange('board')}
+          className={`flex items-center gap-2 px-2 py-2 rounded transition-colors ${
+            activeTab === 'board'
+              ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+              : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-200'
+          }`}
+          title="Message Board"
+        >
+          <img 
+            src="/icons/section-board.png" 
+            alt="Board" 
+            className="w-5 h-5"
+            onError={(e) => {
+              const target = e.target as HTMLImageElement;
+              target.style.display = 'none';
+            }}
+          />
+          <span className="text-sm font-medium">Board</span>
+        </button>
+        <button
+          onClick={() => onTabChange('news')}
+          className={`flex items-center gap-2 px-2 py-2 rounded transition-colors ${
+            activeTab === 'news'
+              ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+              : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-200'
+          }`}
+          title="News"
+        >
+          <img 
+            src="/icons/section-news.png" 
+            alt="News" 
+            className="w-5 h-5"
+            onError={(e) => {
+              const target = e.target as HTMLImageElement;
+              target.style.display = 'none';
+            }}
+          />
+          <span className="text-sm font-medium">News</span>
+        </button>
+        <button
+          onClick={() => onTabChange('files')}
+          className={`flex items-center gap-2 px-2 py-2 rounded transition-colors ${
+            activeTab === 'files'
+              ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+              : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-200'
+          }`}
+          title="Files"
+        >
+          <img 
+            src="/icons/section-files.png" 
+            alt="Files" 
+            className="w-5 h-5"
+            onError={(e) => {
+              const target = e.target as HTMLImageElement;
+              target.style.display = 'none';
+            }}
+          />
+          <span className="text-sm font-medium">Files</span>
+        </button>
+      </div>
+
+      {/* Divider */}
+      <div className="border-t border-gray-200 dark:border-gray-700 my-2" />
+
+      {/* User list */}
+      <div className="flex-1 overflow-y-auto">
+        <UserList
+          users={users}
+          onUserClick={onUserClick}
+          onOpenMessageDialog={onOpenMessageDialog}
+          unreadCounts={unreadCounts}
+        />
+      </div>
+    </div>
+  );
+}
+

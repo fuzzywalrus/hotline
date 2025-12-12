@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useAppStore } from '../../stores/appStore';
 import { usePreferencesStore } from '../../stores/preferencesStore';
 import type { Bookmark, ServerBookmark } from '../../types';
 import EditBookmarkDialog from './EditBookmarkDialog';
+import { useContextMenu, type ContextMenuItem } from '../common/ContextMenu';
 
 interface BookmarkListProps {
   bookmarks: Bookmark[];
@@ -20,6 +21,7 @@ export default function BookmarkList({ bookmarks, searchQuery = '' }: BookmarkLi
   const [expandedTrackers, setExpandedTrackers] = useState<Set<string>>(new Set());
   const [trackerServers, setTrackerServers] = useState<Map<string, ServerBookmark[]>>(new Map());
   const [loadingTrackers, setLoadingTrackers] = useState<Set<string>>(new Set());
+  const { contextMenu, showContextMenu, hideContextMenu } = useContextMenu();
 
   const handleDelete = async (id: string) => {
     try {
@@ -229,7 +231,6 @@ export default function BookmarkList({ bookmarks, searchQuery = '' }: BookmarkLi
 
   const getFilteredTrackerServers = (servers: ServerBookmark[]): ServerBookmark[] => {
     if (!searchQuery.trim()) return servers;
-    const query = searchQuery.toLowerCase().trim();
     return servers.filter(server => 
       matchesSearch(server.name) || 
       (server.description && matchesSearch(server.description))
@@ -265,6 +266,38 @@ export default function BookmarkList({ bookmarks, searchQuery = '' }: BookmarkLi
                         : 'bg-gray-50 dark:bg-gray-800/50'
                     } hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors`}
                     onClick={() => handleToggleTracker(bookmark.id)}
+                    onContextMenu={(e) => {
+                      const items: ContextMenuItem[] = [
+                        {
+                          label: 'Copy Link',
+                          icon: '🔗',
+                          action: () => {
+                            const link = `hotlinetracker://${bookmark.address}:${bookmark.port}`;
+                            navigator.clipboard.writeText(link);
+                          },
+                        },
+                        {
+                          label: 'Copy Address',
+                          icon: '📋',
+                          action: () => {
+                            navigator.clipboard.writeText(`${bookmark.address}:${bookmark.port}`);
+                          },
+                        },
+                        { divider: true },
+                        {
+                          label: 'Edit Tracker...',
+                          icon: '✏️',
+                          action: () => setEditingBookmark(bookmark),
+                        },
+                        { divider: true, label: '', action: () => {} },
+                        {
+                          label: 'Delete Tracker',
+                          icon: '🗑️',
+                          action: () => setDeletingId(bookmark.id),
+                        },
+                      ];
+                      showContextMenu(e, items);
+                    }}
                   >
                     {/* Chevron - 10px width, opacity 0.5 */}
                     <button
@@ -546,6 +579,49 @@ export default function BookmarkList({ bookmarks, searchQuery = '' }: BookmarkLi
           bookmark={editingBookmark}
           onClose={() => setEditingBookmark(null)}
         />
+      )}
+
+      {/* Context menu */}
+      {contextMenu && (
+        <div
+          className="fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg py-1 min-w-[160px]"
+          style={{
+            left: `${contextMenu.x}px`,
+            top: `${contextMenu.y}px`,
+          }}
+        >
+          {contextMenu.items.map((item: ContextMenuItem, index: number) => {
+            if (item.divider) {
+              return (
+                <div
+                  key={`divider-${index}`}
+                  className="my-1 border-t border-gray-200 dark:border-gray-700"
+                />
+              );
+            }
+
+            return (
+              <button
+                key={index}
+                onClick={() => {
+                  if (!item.disabled && item.action) {
+                    item.action();
+                    hideContextMenu();
+                  }
+                }}
+                disabled={item.disabled}
+                className="w-full px-3 py-1.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {item.icon && (
+                  <span className="w-4 h-4 flex items-center justify-center">
+                    {item.icon}
+                  </span>
+                )}
+                <span>{item.label}</span>
+              </button>
+            );
+          })}
+        </div>
       )}
 
       {/* Delete confirmation dialog */}

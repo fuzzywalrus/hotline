@@ -4,6 +4,7 @@ import { useAppStore } from '../../stores/appStore';
 import BookmarkList from './BookmarkList';
 import ConnectDialog from './ConnectDialog';
 import SettingsView from '../settings/SettingsView';
+import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
 import type { Bookmark } from '../../types';
 
 export default function TrackerWindow() {
@@ -25,6 +26,16 @@ export default function TrackerWindow() {
 
     loadBookmarks();
   }, [setBookmarks]);
+
+  // Keyboard shortcuts
+  useKeyboardShortcuts([
+    {
+      key: 'K',
+      modifiers: { meta: true },
+      description: 'Connect to Server',
+      action: () => setShowConnect(true),
+    },
+  ]);
 
   return (
     <div className="h-full w-full flex flex-col bg-white dark:bg-gray-900">

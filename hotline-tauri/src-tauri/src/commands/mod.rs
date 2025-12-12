@@ -108,6 +108,18 @@ pub async fn download_file(
 }
 
 #[tauri::command]
+pub async fn upload_file(
+    server_id: String,
+    path: Vec<String>,
+    file_name: String,
+    file_data: Vec<u8>,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    println!("Command: upload_file {} ({} bytes)", file_name, file_data.len());
+    state.upload_file(&server_id, path, file_name, file_data).await
+}
+
+#[tauri::command]
 pub async fn get_news_categories(
     server_id: String,
     path: Vec<String>,

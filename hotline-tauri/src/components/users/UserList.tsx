@@ -13,6 +13,7 @@ interface UserListProps {
   users: User[];
   unreadCounts: Map<number, number>;
   onUserClick: (user: User) => void;
+  onOpenMessageDialog?: (user: User) => void;
 }
 
 export default function UserList({ users, unreadCounts, onUserClick }: UserListProps) {

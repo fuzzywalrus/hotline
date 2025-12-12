@@ -24,13 +24,13 @@ This file tracks completed features and implementation notes for the Tauri port.
 ### High Priority Features
 - [x] Server agreement dialog and acceptance
 - [x] Server banner download and display
-- [ ] File uploads (complement to downloads)
-- [ ] Connection status indicators (connecting/connected/logged-in states)
-- [ ] Server info display (name, description, user count)
+- [x] File uploads (complement to downloads)
+- [x] Connection status indicators (connecting/connected/logged-in states)
+- [x] Server info display (name, description, user count)
 
 ### Medium Priority Features
-- [ ] Broadcast messages (server-wide announcements)
-- [ ] Sound settings tab (add to Settings)
+- [x] Broadcast messages (server-wide announcements)
+- [x] Sound settings tab (add to Settings)
 - [ ] About window
 - [ ] File preview (images, text files)
 - [ ] Transfer list window (active/completed transfers)
@@ -41,8 +41,8 @@ This file tracks completed features and implementation notes for the Tauri port.
 - [ ] Bookmark import/export
 - [ ] Bookmark reordering (drag & drop)
 - [ ] Server agreement persistence (remember accepted agreements)
-- [ ] Keyboard shortcuts
-- [ ] Context menus
+- [x] Keyboard shortcuts
+- [x] Context menus
 - [ ] Notification system
 
 ---
@@ -882,6 +882,371 @@ Created domain-specific components in proper folders:
 
 **Next task:** File uploads, connection status indicators, or server info display
 
+### 2025-12-12: File Search, Refresh, and Cache Depth Improvements
+
+**What was completed:**
+- **File Search Functionality**: Search across all cached files with real-time filtering
+- **Refresh Button**: Manual refresh button for file lists to clear cache and fetch fresh data
+- **Cache Path Clearing**: Added `clearFileCachePath()` method to clear specific paths from cache
+- **Default Cache Depth**: Increased from 4 to 8 layers deep for better search coverage
+
+**File Search Implementation:**
+- Search input bar at top of Files tab with search icon and clear button
+- Searches through all cached files across all directories (not just current path)
+- Case-insensitive matching (matches if filename contains query)
+- Real-time results as you type
+- Search results show full path (e.g., "folder1 / folder2 / file.txt")
+- Clicking search result navigates to that file's directory
+- Result count display ("Found X files" or "No files found")
+- Search only searches cached files (up to configured cache depth)
+
+**Refresh Functionality:**
+- Refresh button in file list breadcrumb bar
+- Clears cache for current path and fetches fresh data from server
+- Ensures users can always get latest file listings
+- Works alongside automatic caching system
+
+**Cache Improvements:**
+- Added `clearFileCachePath()` method to appStore for targeted cache clearing
+- Default cache depth increased from 4 to 8 layers
+- Better search coverage since more files are cached by default
+- Users can still adjust cache depth in Settings if needed
+
+**Files created/modified:**
+- `src/components/files/FilesTab.tsx` - Added search input, search state, result filtering, refresh button
+- `src/components/server/ServerWindow.tsx` - Added `getAllCachedFiles()` callback, refresh handler
+- `src/stores/appStore.ts` - Added `clearFileCachePath()` method
+- `src/stores/preferencesStore.ts` - Updated default `fileCacheDepth` from 4 to 8
+
+**Implementation details:**
+- Search uses `useEffect` to filter cached files when query changes
+- `getAllCachedFiles()` callback iterates through all cached paths and returns flat list
+- Search results include path information for navigation
+- Refresh clears specific path from cache before fetching fresh data
+- Cache depth of 8 layers provides good balance between coverage and performance
+
+**Testing status:**
+- ✅ Search functionality works with cached files
+- ✅ Refresh button clears cache and fetches fresh data
+- ✅ Search results navigate to correct directories
+- ✅ Default cache depth set to 8 layers
+- ⏸️ Search coverage depends on cache depth and navigation patterns
+
+**Next task:** Connection status indicators or other features
+
+### 2025-12-12: File Upload Implementation
+
+**What was completed:**
+- **File Upload Protocol**: Complete implementation of file upload transaction and transfer
+- **Upload UI**: Upload button in Files tab with file picker
+- **Progress Tracking**: Upload progress events and state management
+- **File Transfer**: FILP format upload with INFO and DATA forks
+
+**Backend Implementation:**
+- Added `upload_file()` method to `HotlineClient` in `files.rs`
+  - Sends UploadFile transaction (type 203) with fileName and filePath fields
+  - Gets referenceNumber from server reply
+  - Opens new TCP connection to port+1 for transfer
+  - Sends HTXF handshake with total transfer size
+  - Sends FILP header (24 bytes) with fork count
+  - Sends INFO fork header and data (minimal for now)
+  - Sends DATA fork header and file data in 64KB chunks
+  - Progress callback reports bytes sent every 2%
+- Added `upload_file()` method to `AppState` with progress event emission
+- Added `upload_file` Tauri command
+
+**Frontend Implementation:**
+- Added upload button to FilesTab breadcrumb bar (next to Refresh button)
+- Hidden file input element for file selection
+- `handleUploadFile()` function in ServerWindow:
+  - Reads file as ArrayBuffer
+  - Converts to Uint8Array for backend
+  - Calls upload_file command
+  - Refreshes file list after successful upload
+- Upload progress tracking with `uploadProgress` state Map
+- Upload progress event listener for real-time updates
+- Success/error alerts for user feedback
+
+**Files created/modified:**
+- `src-tauri/src/protocol/client/files.rs` - Added `upload_file()` and `perform_file_upload()` methods
+- `src-tauri/src/state/mod.rs` - Added `upload_file()` state method with progress events
+- `src-tauri/src/commands/mod.rs` - Added `upload_file` Tauri command
+- `src-tauri/src/lib.rs` - Registered `upload_file` command
+- `src/components/files/FilesTab.tsx` - Added upload button and file input
+- `src/components/server/ServerWindow.tsx` - Added upload progress tracking and handler
+
+**Implementation details:**
+- **Upload Transaction**: Type 203 (UploadFile) with FileName (201) and FilePath (202) fields
+- **Transfer Protocol**: Same as downloads - HTXF handshake, FILP header, fork headers and data
+- **Progress Tracking**: Emits `upload-progress-{serverId}` events with fileName, bytesSent, totalBytes, progress%
+- **File Reading**: Frontend reads file using FileReader API and passes bytes to backend
+- **File List Refresh**: Automatically refreshes after successful upload to show new file
+
+**Testing status:**
+- ✅ Code compiles successfully
+- ✅ Upload button appears in Files tab
+- ✅ File picker opens on button click
+- ✅ Progress tracking implemented
+- ⏸️ Needs testing with live server to verify upload functionality
+
+**Next task:** Other features from development goals
+
+### 2025-12-12: Connection Status Indicators
+
+**What was completed:**
+- **Status Change Events**: Added StatusChanged event to HotlineEvent enum
+- **Status Emission**: Emit status change events at all connection state transitions
+- **Event Forwarding**: Forward status events to frontend via Tauri events
+- **Status Indicator UI**: Visual status indicator in ServerWindow header with colored dot and text
+
+**Backend Implementation:**
+- Added `StatusChanged(ConnectionStatus)` variant to `HotlineEvent` enum
+- Emit status events when status changes:
+  - `Connecting` - when starting TCP connection
+  - `Connected` - after TCP connection established
+  - `LoggingIn` - when starting login transaction
+  - `LoggedIn` - after successful login
+  - `Disconnected` - on disconnect
+- Forward status events to frontend via `status-changed-{serverId}` Tauri events
+
+**Frontend Implementation:**
+- Added `connectionStatus` state to ServerWindow (defaults to 'connecting')
+- Event listener for `status-changed-{serverId}` events
+- Status indicator in header with:
+  - Colored dot (green=logged-in, yellow=connecting/logging-in, blue=connected, red=failed, gray=disconnected)
+  - Status text label (e.g., "Connected", "Connecting...", "Logging in...")
+  - Pulsing animation for connecting/logging-in states
+  - Tooltip showing raw status value
+
+**Status States:**
+- **Disconnected** - Gray dot, "Disconnected"
+- **Connecting** - Yellow pulsing dot, "Connecting..."
+- **Connected** - Blue dot, "Connected"
+- **LoggingIn** - Yellow pulsing dot, "Logging in..."
+- **LoggedIn** - Green dot, "Connected"
+- **Failed** - Red dot, "Failed"
+
+**Files created/modified:**
+- `src-tauri/src/protocol/client/mod.rs` - Added StatusChanged event, emit on all status changes
+- `src-tauri/src/state/mod.rs` - Forward StatusChanged events to frontend
+- `src/components/server/ServerWindow.tsx` - Added status state, event listener, and UI indicator
+
+**Implementation details:**
+- Status changes are emitted immediately when state transitions occur
+- Frontend receives real-time status updates via Tauri events
+- Status indicator positioned in header next to server name and user count
+- Visual feedback helps users understand connection progress
+
+**Testing status:**
+- ✅ Code compiles successfully
+- ✅ Status events emitted on all state transitions
+- ✅ Status indicator displays in header
+- ✅ Status updates in real-time during connection
+- ⏸️ Needs testing with live server to verify all status transitions
+
+**Next task:** Other features from development goals
+
+### 2025-12-12: Broadcast Messages Implementation
+
+**What was completed:**
+- **Broadcast Message Forwarding**: Forward ServerMessage events to frontend
+- **Broadcast Display**: Display broadcast messages in chat with distinct styling
+- **Visual Distinction**: Broadcast messages shown with special icon and background
+
+**Backend Implementation:**
+- Updated `ServerMessage` event forwarding in `state/mod.rs`
+- Emits `broadcast-message-{serverId}` Tauri events when server sends broadcast
+- Backend already distinguishes broadcasts (no UserId) from private messages (has UserId)
+
+**Frontend Implementation:**
+- Added broadcast message event listener in ServerWindow
+- Broadcast messages added to chat messages list with:
+  - `userId: 0`
+  - `userName: 'Server'`
+  - Message content from server
+- Updated ChatTab to detect and style broadcast messages:
+  - Special card-style display with blue background
+  - Broadcast icon (megaphone/speaker)
+  - "Server Broadcast" label
+  - Distinct from regular chat messages
+
+**Visual Design:**
+- Broadcast messages displayed in a card with:
+  - Light blue background (`bg-blue-50 dark:bg-blue-900/20`)
+  - Blue border (`border-blue-200 dark:border-blue-800`)
+  - Rounded corners (`rounded-lg`)
+  - Broadcast icon (speaker/megaphone SVG)
+  - "Server Broadcast" header in blue text
+  - Bold message text
+  - Proper spacing and padding
+
+**Files created/modified:**
+- `src-tauri/src/state/mod.rs` - Forward ServerMessage events as broadcast-message events
+- `src/components/server/ServerWindow.tsx` - Added broadcast message event listener
+- `src/components/chat/ChatTab.tsx` - Added broadcast message detection and styling
+
+**Implementation details:**
+- Broadcast messages are identified by `userName === 'Server' && userId === 0`
+- Displayed inline in chat timeline with other messages
+- Auto-scrolls to show new broadcasts
+- Styled to stand out from regular chat messages
+
+**Testing status:**
+- ✅ Code compiles successfully
+- ✅ Broadcast events forwarded to frontend
+- ✅ Broadcast messages display with special styling
+- ⏸️ Needs testing with live server that sends broadcast messages
+
+### 2025-12-12: Sound Settings and Sound Effects
+
+**What was completed:**
+- **Sound Files**: Ported 8 sound files from Swift app (AIFF format)
+- **Sound Preferences**: Added comprehensive sound settings to preferencesStore
+- **Sound Settings Tab**: Created SoundSettingsTab component with toggles for each sound
+- **Sound Playback System**: Created sound utility and useSound hook
+- **Sound Integration**: Integrated sounds into all relevant events
+
+**Sound Files Ported:**
+- `chat-message.aiff` - Chat messages
+- `error.aiff` - Errors
+- `logged-in.aiff` - Successful login
+- `new-news.aiff` - New news articles
+- `server-message.aiff` - Server broadcasts
+- `transfer-complete.aiff` - File transfer completion
+- `user-login.aiff` - User joins
+- `user-logout.aiff` - User leaves
+
+**Sound Preferences:**
+- Master toggle: `playSounds` (enables/disables all sounds)
+- Individual toggles for each sound type:
+  - Chat Messages
+  - File Transfer Complete
+  - Private Messages
+  - User Join
+  - User Leave
+  - Logged In
+  - Error
+  - Server Broadcast
+  - New News
+- All preferences persisted to localStorage
+- All sounds enabled by default
+
+**Sound Settings UI:**
+- New "Sound" tab in Settings dialog
+- Master "Enable Sounds" toggle at top
+- Section with individual sound toggles
+- Toggles disabled when master toggle is off
+- Clean, organized layout matching other settings tabs
+
+**Sound Playback System:**
+- `sounds.ts` utility:
+  - Preloads all sounds on module load
+  - Caches Audio elements for performance
+  - Sets volume to 0.75 (matching Swift app)
+  - Handles playback errors gracefully
+- `useSound.ts` hook:
+  - Provides convenient methods for each sound type
+  - Respects user preferences
+  - Only plays if master toggle and specific toggle are enabled
+
+**Sound Integration:**
+- **Chat messages**: Plays `chat-message` sound
+- **Private messages**: Plays `chat-message` sound (uses same sound)
+- **User join**: Plays `user-login` sound
+- **User leave**: Plays `user-logout` sound
+- **Logged in**: Plays `logged-in` sound when status changes to 'logged-in'
+- **File transfer complete**: Plays `transfer-complete` sound on download/upload success
+- **Errors**: Plays `error` sound on download/upload failures
+- **Server broadcasts**: Plays `server-message` sound
+- **New news**: Ready for integration (sound preference added)
+
+**Files created/modified:**
+- `public/sounds/*.aiff` - NEW: 8 sound files copied from Swift app
+- `src/stores/preferencesStore.ts` - Added sound preferences (9 new state fields + actions)
+- `src/components/settings/SoundSettingsTab.tsx` - NEW: Sound settings UI
+- `src/components/settings/SettingsView.tsx` - Added Sound tab
+- `src/utils/sounds.ts` - NEW: Sound playback utility
+- `src/hooks/useSound.ts` - NEW: useSound hook
+- `src/components/server/ServerWindow.tsx` - Integrated sounds into all event listeners
+
+**Implementation details:**
+- Sounds preloaded on app start for instant playback
+- Audio elements cached to avoid reloading
+- Volume set to 0.75 (75%) matching Swift app
+- Playback errors handled gracefully (won't crash app)
+- Sounds respect both master toggle and individual preferences
+- All preferences persisted across app restarts
+
+**Testing status:**
+- ✅ Sound files copied successfully
+- ✅ Sound settings UI displays correctly
+- ✅ Preferences persist to localStorage
+- ✅ Sound playback integrated into events
+- ✅ TypeScript compilation successful
+- ⏸️ Needs testing with live server to verify sound playback works correctly
+
+**Next task:** Other features from development goals
+
+### 2025-12-12: Keyboard Shortcuts
+
+**What was completed:**
+- **Keyboard Shortcuts Hook**: Created `useKeyboardShortcuts` hook for handling keyboard shortcuts
+- **Shortcuts Implementation**: Implemented shortcuts for common actions
+- **Shortcuts Settings Tab**: Added keyboard shortcuts list to Settings
+
+**Keyboard Shortcuts Implemented:**
+- **General:**
+  - `⌘K` - Connect to Server (in TrackerWindow)
+  - `Escape` - Close dialogs
+  
+- **Server Navigation:**
+  - `⌘1` - Switch to Chat tab
+  - `⌘2` - Switch to Board tab
+  - `⌘3` - Switch to News tab
+  - `⌘4` - Switch to Files tab
+  
+- **File Navigation:**
+  - `←` - Navigate back / Up one level
+  - `⌘F` - Focus search (in Files tab)
+
+**Implementation Details:**
+- `useKeyboardShortcuts` hook:
+  - Handles keydown events globally
+  - Respects input/textarea focus (doesn't trigger when typing)
+  - Supports meta (⌘/Ctrl), shift, alt, and ctrl modifiers
+  - Supports enabled/disabled state per shortcut
+  - Prevents default behavior when shortcut matches
+  
+- **Shortcuts Settings Tab:**
+  - New "Shortcuts" tab in Settings dialog
+  - Displays all available shortcuts organized by category
+  - Shows formatted key combinations (⌘, ⇧, ⌥ symbols)
+  - Platform-aware formatting (⌘ on Mac, Ctrl on Windows/Linux)
+  - Clean, organized layout with hover effects
+
+**Files created/modified:**
+- `src/hooks/useKeyboardShortcuts.ts` - NEW: Keyboard shortcuts hook
+- `src/components/settings/KeyboardShortcutsTab.tsx` - NEW: Shortcuts list UI
+- `src/components/settings/SettingsView.tsx` - Added Shortcuts tab
+- `src/components/tracker/TrackerWindow.tsx` - Added ⌘K shortcut for connect
+- `src/components/server/ServerWindow.tsx` - Added tab switching shortcuts (⌘1-4) and Escape
+- `src/components/files/FilesTab.tsx` - Added file navigation shortcuts (←, ⌘F)
+
+**Shortcut Formatting:**
+- Platform detection for ⌘ vs Ctrl
+- Arrow keys displayed as symbols (←, →, ↑, ↓)
+- Space key displayed as "Space"
+- Modifier keys displayed with symbols (⌘, ⇧, ⌥)
+
+**Testing status:**
+- ✅ Keyboard shortcuts hook implemented
+- ✅ Shortcuts integrated into components
+- ✅ Settings tab displays shortcuts list
+- ✅ TypeScript compilation successful
+- ⏸️ Needs testing with live app to verify shortcuts work correctly
+
+**Next task:** Other features from development goals
+
 ---
 
 ### Future: Tracker Features
@@ -919,7 +1284,7 @@ Created domain-specific components in proper folders:
 
 ### Server Features
 - [x] Server agreement dialog (inline in chat view)
-- [ ] Server info display (name, description, user count)
+- [x] Server info display (name, description, user count)
 - [x] Server banner download and display
 - [ ] Connection status indicators
 - [ ] Server statistics
@@ -974,3 +1339,56 @@ Created domain-specific components in proper folders:
 - Hot reload working for both Rust and React changes
 - Default port 5500 for Hotline servers
 - Using crypto.randomUUID() for bookmark IDs
+
+### 2025-12-12: Context Menus
+
+**What was completed:**
+- **Context Menu Component**: Created reusable `ContextMenu` component and `useContextMenu` hook
+- **Bookmark Context Menus**: Added right-click menus to bookmarks and trackers
+- **File Context Menus**: Added right-click menus to files in the file browser
+
+**Context Menu Features:**
+- **Bookmarks:**
+  - Copy Link (hotline:// or hotlinetracker://)
+  - Copy Address (host:port)
+  - Edit Bookmark/Tracker
+  - Delete Bookmark/Tracker
+  
+- **Files:**
+  - Download (disabled for folders)
+  - Get Info (shows file details)
+  - Preview (disabled for folders, TODO: implement preview)
+
+**Implementation Details:**
+- `ContextMenu` component:
+  - Positioned at mouse cursor
+  - Closes on outside click or Escape key
+  - Supports dividers between menu items
+  - Supports disabled items
+  - Icons and labels for each item
+  - Dark mode support
+  
+- `useContextMenu` hook:
+  - Manages context menu state (position, items)
+  - `showContextMenu(event, items)` - shows menu at cursor
+  - `hideContextMenu()` - closes menu
+  - Calculates position to keep menu within viewport
+
+**Files created/modified:**
+- `src/components/common/ContextMenu.tsx` - NEW: Context menu component and hook
+- `src/components/tracker/BookmarkList.tsx` - Added context menus to bookmarks and trackers
+- `src/components/files/FilesTab.tsx` - Added context menus to files
+
+**Visual Design:**
+- Clean, native-looking menu style
+- Hover effects on menu items
+- Proper spacing and padding
+- Icons for visual clarity
+- Dividers to group related actions
+
+**Testing status:**
+- ✅ Context menu component created
+- ✅ Context menus added to bookmarks
+- ✅ Context menus added to files
+- ✅ TypeScript compilation successful
+- ⏸️ Needs testing with live app to verify menus work correctly

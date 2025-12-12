@@ -171,7 +171,11 @@ impl AppState {
                         let _ = app_handle.emit(&format!("user-changed-{}", server_id_clone), payload);
                     }
                     HotlineEvent::ServerMessage(msg) => {
-                        println!("Server message: {}", msg);
+                        println!("Server broadcast message: {}", msg);
+                        let payload = serde_json::json!({
+                            "message": msg,
+                        });
+                        let _ = app_handle.emit(&format!("broadcast-message-{}", server_id_clone), payload);
                     }
                     HotlineEvent::AgreementRequired(agreement) => {
                         println!("State: Received AgreementRequired event, agreement length: {}", agreement.len());
@@ -193,7 +197,7 @@ impl AppState {
                             Err(e) => println!("State: Failed to emit event: {:?}", e),
                         }
                     }
-                    HotlineEvent::FileList { files } => {
+                    HotlineEvent::FileList { files, path } => {
                         let payload = serde_json::json!({
                             "files": files.iter().map(|f| serde_json::json!({
                                 "name": f.name,
@@ -202,6 +206,7 @@ impl AppState {
                                 "fileType": f.file_type,
                                 "creator": f.creator,
                             })).collect::<Vec<_>>(),
+                            "path": path,
                         });
                         let _ = app_handle.emit(&format!("file-list-{}", server_id_clone), payload);
                     }
@@ -217,6 +222,12 @@ impl AppState {
                             "message": message,
                         });
                         let _ = app_handle.emit(&format!("private-message-{}", server_id_clone), payload);
+                    }
+                    HotlineEvent::StatusChanged(status) => {
+                        let payload = serde_json::json!({
+                            "status": status,
+                        });
+                        let _ = app_handle.emit(&format!("status-changed-{}", server_id_clone), payload);
                     }
                 }
             }
@@ -472,6 +483,43 @@ impl AppState {
 
         if let Some(client) = clients.get(server_id) {
             client.post_news_article(title, text, path, parent_id).await
+        } else {
+            Err("Server not connected".to_string())
+        }
+    }
+
+    pub async fn upload_file(
+        &self,
+        server_id: &str,
+        path: Vec<String>,
+        file_name: String,
+        file_data: Vec<u8>,
+    ) -> Result<(), String> {
+        let clients = self.clients.read().await;
+
+        if let Some(client) = clients.get(server_id) {
+            let app_handle = self.app_handle.clone();
+            let server_id_clone = server_id.to_string();
+            let file_name_clone = file_name.clone();
+            let total_bytes = file_data.len() as u32;
+
+            client.upload_file(
+                path,
+                file_name,
+                file_data,
+                move |bytes_sent, total_bytes| {
+                    let progress = (bytes_sent as f64 / total_bytes as f64 * 100.0) as u32;
+                    let payload = serde_json::json!({
+                        "fileName": file_name_clone,
+                        "bytesSent": bytes_sent,
+                        "totalBytes": total_bytes,
+                        "progress": progress,
+                    });
+                    let _ = app_handle.emit(&format!("upload-progress-{}", server_id_clone), payload);
+                }
+            ).await?;
+
+            Ok(())
         } else {
             Err("Server not connected".to_string())
         }

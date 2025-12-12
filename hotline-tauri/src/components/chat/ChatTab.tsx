@@ -136,6 +136,31 @@ export default function ChatTab({
           </div>
         ) : (
           messages.map((msg, index) => {
+            // Check if this is a broadcast message (from Server)
+            const isBroadcast = msg.userName === 'Server' && msg.userId === 0;
+            
+            if (isBroadcast) {
+              // Create unique key for broadcast
+              const uniqueKey = `broadcast-${msg.timestamp.getTime()}-${msg.message.substring(0, 20)}-${index}`;
+              return (
+                <div key={uniqueKey} className="my-2">
+                  <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 flex items-start gap-3">
+                    <svg className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
+                    </svg>
+                    <div className="flex-1">
+                      <div className="text-xs font-semibold text-blue-700 dark:text-blue-300 mb-1">
+                        Server Broadcast
+                      </div>
+                      <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                        {msg.message}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+            
             const isOwnMessage = msg.userName === 'Me';
             // Create unique key from userId, timestamp, message content, and index
             const uniqueKey = `${msg.userId}-${msg.timestamp.getTime()}-${msg.message.substring(0, 20)}-${index}`;

@@ -2,12 +2,14 @@ import { useState, useEffect } from 'react';
 import { usePreferencesStore } from '../../stores/preferencesStore';
 
 export default function GeneralSettingsTab() {
-  const { username, setUsername } = usePreferencesStore();
+  const { username, setUsername, fileCacheDepth, setFileCacheDepth } = usePreferencesStore();
   const [localUsername, setLocalUsername] = useState(username);
+  const [localFileCacheDepth, setLocalFileCacheDepth] = useState(fileCacheDepth);
 
   useEffect(() => {
     setLocalUsername(username);
-  }, [username]);
+    setLocalFileCacheDepth(fileCacheDepth);
+  }, [username, fileCacheDepth]);
 
   const handleSave = () => {
     setUsername(localUsername.trim() || 'guest');
@@ -35,6 +37,24 @@ export default function GeneralSettingsTab() {
         />
         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
           This name will be displayed to other users on servers you connect to.
+        </p>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+          File Cache Depth
+        </label>
+        <input
+          type="number"
+          min="0"
+          max="10"
+          value={localFileCacheDepth}
+          onChange={(e) => setLocalFileCacheDepth(parseInt(e.target.value) || 0)}
+          onBlur={() => setFileCacheDepth(Math.max(0, Math.min(10, localFileCacheDepth)))}
+          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          Number of folder layers to pre-fetch and cache when connecting to a server. Higher values improve browsing speed but use more memory. (0-10, default: 3)
         </p>
       </div>
     </div>

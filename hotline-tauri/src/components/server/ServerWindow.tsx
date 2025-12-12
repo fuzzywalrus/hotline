@@ -1,74 +1,22 @@
 import { useState, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
 import MessageDialog from '../chat/MessageDialog';
 import UserInfoDialog from '../users/UserInfoDialog';
-import UserList from '../users/UserList';
 import ChatTab from '../chat/ChatTab';
 import BoardTab from '../board/BoardTab';
 import FilesTab from '../files/FilesTab';
 import NewsTab from '../news/NewsTab';
-import { ServerInfo } from '../../types';
-
-// Hotline user flag bits
-const USER_FLAG_ADMIN = 0x0001;
-const USER_FLAG_IDLE = 0x0002;
-
-function parseUserFlags(flags: number) {
-  return {
-    isAdmin: (flags & USER_FLAG_ADMIN) !== 0,
-    isIdle: (flags & USER_FLAG_IDLE) !== 0,
-  };
-}
-
-interface ChatMessage {
-  userId: number;
-  userName: string;
-  message: string;
-  timestamp: Date;
-}
-
-interface User {
-  userId: number;
-  userName: string;
-  iconId: number;
-  flags: number;
-  isAdmin: boolean;
-  isIdle: boolean;
-}
-
-interface PrivateMessage {
-  text: string;
-  isOutgoing: boolean;
-  timestamp: Date;
-}
-
-interface FileItem {
-  name: string;
-  size: number;
-  isFolder: boolean;
-  fileType?: string;
-  creator?: string;
-}
-
-interface NewsCategory {
-  type: number;
-  count: number;
-  name: string;
-  path: string[];
-}
-
-interface NewsArticle {
-  id: number;
-  parent_id: number;
-  flags: number;
-  title: string;
-  poster: string;
-  date?: string;
-  path: string[];
-}
-
-type ViewTab = 'chat' | 'board' | 'news' | 'files';
+import ServerBanner from './ServerBanner';
+import ServerHeader from './ServerHeader';
+import ServerSidebar from './ServerSidebar';
+import { ServerInfo, ConnectionStatus } from '../../types';
+import { useAppStore } from '../../stores/appStore';
+import { usePreferencesStore } from '../../stores/preferencesStore';
+import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
+import { useServerEvents } from './hooks/useServerEvents';
+import { useServerHandlers } from './hooks/useServerHandlers';
+import { parseUserFlags } from './serverUtils';
+import type { ChatMessage, User, PrivateMessage, FileItem, NewsCategory, NewsArticle, ViewTab } from './serverTypes';
 
 interface ServerWindowProps {
   serverId: string;
@@ -77,14 +25,18 @@ interface ServerWindowProps {
 }
 
 export default function ServerWindow({ serverId, serverName, onClose }: ServerWindowProps) {
+  const { setFileCache, getFileCache, clearFileCache, clearFileCachePath } = useAppStore();
+  const { fileCacheDepth } = usePreferencesStore();
   const [activeTab, setActiveTab] = useState<ViewTab>('chat');
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [files, setFiles] = useState<FileItem[]>([]);
+  const currentPathRef = useRef<string[]>([]);
   const [currentPath, setCurrentPath] = useState<string[]>([]);
   const [downloadProgress, setDownloadProgress] = useState<Map<string, number>>(new Map());
+  const [uploadProgress, setUploadProgress] = useState<Map<string, number>>(new Map());
   const [boardPosts, setBoardPosts] = useState<string[]>([]);
   const [boardMessage, setBoardMessage] = useState('');
   const [postingBoard, setPostingBoard] = useState(false);
@@ -106,6 +58,7 @@ export default function ServerWindow({ serverId, serverName, onClose }: ServerWi
   const [agreementText, setAgreementText] = useState<string | null>(null);
   const [bannerUrl, setBannerUrl] = useState<string | null>(null);
   const [serverInfo, setServerInfo] = useState<ServerInfo | null>(null);
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('connecting');
 
   // Debug: log when bannerUrl changes
   useEffect(() => {
@@ -134,25 +87,84 @@ export default function ServerWindow({ serverId, serverName, onClose }: ServerWi
     checkPendingAgreement();
   }, [serverId]);
 
-  // Listen for incoming chat messages
-  useEffect(() => {
-    const unlisten = listen<ChatMessage>(`chat-message-${serverId}`, (event) => {
-      setMessages((prev) => [...prev, {
-        ...event.payload,
-        timestamp: new Date(),
-      }]);
-    });
+  // Use server events hook (handles all event listeners)
+  useServerEvents({
+    serverId,
+    setMessages,
+    setUsers,
+    setFiles,
+    setBoardPosts,
+    setPrivateMessageHistory,
+    setUnreadCounts,
+    setDownloadProgress,
+    setUploadProgress,
+    setAgreementText,
+    setConnectionStatus,
+    setFileCache,
+    currentPathRef,
+    parseUserFlags,
+  });
 
-    return () => {
-      unlisten.then((fn) => fn()).catch(() => {
-        // Ignore cleanup errors
-      });
-    };
-  }, [serverId]);
+  // Keyboard shortcuts
+  useKeyboardShortcuts([
+    {
+      key: '1',
+      modifiers: { meta: true },
+      description: 'Switch to Chat tab',
+      action: () => setActiveTab('chat'),
+      enabled: connectionStatus === 'logged-in',
+    },
+    {
+      key: '2',
+      modifiers: { meta: true },
+      description: 'Switch to Board tab',
+      action: () => setActiveTab('board'),
+      enabled: connectionStatus === 'logged-in',
+    },
+    {
+      key: '3',
+      modifiers: { meta: true },
+      description: 'Switch to News tab',
+      action: () => setActiveTab('news'),
+      enabled: connectionStatus === 'logged-in',
+    },
+    {
+      key: '4',
+      modifiers: { meta: true },
+      description: 'Switch to Files tab',
+      action: () => setActiveTab('files'),
+      enabled: connectionStatus === 'logged-in',
+    },
+    {
+      key: 'Escape',
+      description: 'Close dialogs',
+      action: () => {
+        if (messageDialogUser) {
+          setMessageDialogUser(null);
+        }
+        if (userInfoDialogUser) {
+          setUserInfoDialogUser(null);
+        }
+      },
+    },
+  ]);
+
+  // Update ref when currentPath changes
+  useEffect(() => {
+    currentPathRef.current = currentPath;
+  }, [currentPath]);
 
   // Request file list when Files tab is activated or path changes
   useEffect(() => {
     if (activeTab === 'files') {
+      // Check cache first for instant display
+      const cached = getFileCache(serverId, currentPath);
+      if (cached) {
+        setFiles(cached);
+      }
+
+      // Always fetch from server to ensure we have the latest data
+      // (cache is just for prefetching and instant display)
       invoke('get_file_list', {
         serverId,
         path: currentPath,
@@ -160,23 +172,71 @@ export default function ServerWindow({ serverId, serverName, onClose }: ServerWi
         console.error('Failed to get file list:', error);
       });
     }
-  }, [activeTab, currentPath, serverId]);
+  }, [activeTab, currentPath, serverId, getFileCache]);
 
-  // Listen for file list events
+  // Pre-fetch file listings when connected
   useEffect(() => {
-    const unlisten = listen<{ files: FileItem[] }>(
-      `file-list-${serverId}`,
-      (event) => {
-        setFiles(event.payload.files);
-      }
-    );
+    if (users.length > 0 && fileCacheDepth > 0) {
+      let cancelled = false;
+      
+      const prefetchFiles = async (path: string[], depth: number): Promise<void> => {
+        if (depth < 0 || cancelled) return;
 
+        // Check if already cached
+        const cached = getFileCache(serverId, path);
+        if (cached) {
+          // Already cached, recurse into folders
+          for (const file of cached) {
+            if (file.isFolder && !cancelled) {
+              await prefetchFiles([...path, file.name], depth - 1);
+            }
+          }
+          return;
+        }
+
+        // Fetch this path and wait for the event
+        try {
+          await invoke('get_file_list', {
+            serverId,
+            path,
+          });
+          
+          // Wait for the file list event to arrive and be cached
+          let attempts = 0;
+          while (attempts < 50 && !cancelled) {
+            await new Promise(resolve => setTimeout(resolve, 50));
+            const cached = getFileCache(serverId, path);
+            if (cached) {
+              // Now recurse into folders
+              for (const file of cached) {
+                if (file.isFolder && !cancelled) {
+                  await prefetchFiles([...path, file.name], depth - 1);
+                }
+              }
+              return;
+            }
+            attempts++;
+          }
+        } catch (error) {
+          console.error(`Failed to prefetch files at ${path.join('/')}:`, error);
+        }
+      };
+
+      // Start prefetching from root
+      prefetchFiles([], fileCacheDepth).catch(console.error);
+
+      return () => {
+        cancelled = true;
+      };
+    }
+  }, [serverId, users.length, fileCacheDepth, getFileCache]);
+
+  // Clear cache when disconnecting
+  useEffect(() => {
     return () => {
-      unlisten.then((fn) => fn()).catch(() => {
-        // Ignore cleanup errors
-      });
+      clearFileCache(serverId);
     };
-  }, [serverId]);
+  }, [serverId, clearFileCache]);
 
   // Request message board when Board tab is activated
   useEffect(() => {
@@ -198,210 +258,6 @@ export default function ServerWindow({ serverId, serverName, onClose }: ServerWi
     }
   }, [activeTab, serverId, loadingBoard, boardPosts.length]);
 
-  // Listen for new message board posts
-  useEffect(() => {
-    const unlisten = listen<{ message: string }>(
-      `message-board-post-${serverId}`,
-      () => {
-        // Refresh the board when a new post arrives
-        invoke<string[]>('get_message_board', {
-          serverId,
-        }).then((posts) => {
-          setBoardPosts(posts);
-        }).catch((error) => {
-          console.error('Failed to refresh message board:', error);
-        });
-      }
-    );
-
-    return () => {
-      unlisten.then((fn) => fn()).catch(() => {
-        // Ignore cleanup errors
-      });
-    };
-  }, [serverId]);
-
-  // Listen for user events
-  useEffect(() => {
-    const unlistenJoin = listen<{ userId: number; userName: string; iconId: number; flags: number }>(
-      `user-joined-${serverId}`,
-      (event) => {
-        setUsers((prev) => {
-          // Check if user already exists
-          if (prev.some(u => u.userId === event.payload.userId)) {
-            return prev;
-          }
-          const { isAdmin, isIdle } = parseUserFlags(event.payload.flags);
-          return [...prev, {
-            userId: event.payload.userId,
-            userName: event.payload.userName,
-            iconId: event.payload.iconId,
-            flags: event.payload.flags,
-            isAdmin,
-            isIdle,
-          }];
-        });
-      }
-    );
-
-    const unlistenLeave = listen<{ userId: number }>(
-      `user-left-${serverId}`,
-      (event) => {
-        setUsers((prev) => prev.filter(u => u.userId !== event.payload.userId));
-      }
-    );
-
-    const unlistenChange = listen<{ userId: number; userName: string; iconId: number; flags: number }>(
-      `user-changed-${serverId}`,
-      (event) => {
-        const { isAdmin, isIdle } = parseUserFlags(event.payload.flags);
-        setUsers((prev) => prev.map(u =>
-          u.userId === event.payload.userId
-            ? {
-                userId: event.payload.userId,
-                userName: event.payload.userName,
-                iconId: event.payload.iconId,
-                flags: event.payload.flags,
-                isAdmin,
-                isIdle,
-              }
-            : u
-        ));
-      }
-    );
-
-    return () => {
-      unlistenJoin.then((fn) => fn()).catch(() => {});
-      unlistenLeave.then((fn) => fn()).catch(() => {});
-      unlistenChange.then((fn) => fn()).catch(() => {});
-    };
-  }, [serverId]);
-
-  // Listen for private messages to track unread counts and store history
-  useEffect(() => {
-    const unlisten = listen<{ userId: number; message: string }>(
-      `private-message-${serverId}`,
-      (event) => {
-        const { userId, message } = event.payload;
-
-        // Store message in history
-        setPrivateMessageHistory((prev) => {
-          const newHistory = new Map(prev);
-          const userMessages = newHistory.get(userId) || [];
-          newHistory.set(userId, [
-            ...userMessages,
-            {
-              text: message,
-              isOutgoing: false,
-              timestamp: new Date(),
-            },
-          ]);
-          return newHistory;
-        });
-
-        // Only increment unread count if dialog is not open for this user
-        if (!messageDialogUser || messageDialogUser.userId !== userId) {
-          setUnreadCounts((prev) => {
-            const newCounts = new Map(prev);
-            newCounts.set(userId, (newCounts.get(userId) || 0) + 1);
-            return newCounts;
-          });
-        }
-      }
-    );
-
-    return () => {
-      unlisten.then((fn) => fn()).catch(() => {
-        // Ignore cleanup errors
-      });
-    };
-  }, [serverId, messageDialogUser]);
-
-  // Listen for download progress events
-  useEffect(() => {
-    const unlisten = listen<{ fileName: string; bytesRead: number; totalBytes: number; progress: number }>(
-      `download-progress-${serverId}`,
-      (event) => {
-        const { fileName, progress } = event.payload;
-        setDownloadProgress((prev) => new Map(prev).set(fileName, progress));
-      }
-    );
-
-    return () => {
-      unlisten.then((fn) => fn()).catch(() => {
-        // Ignore cleanup errors
-      });
-    };
-  }, [serverId]);
-
-  // Listen for agreement required events
-  const agreementUnlistenRef = useRef<(() => void) | null>(null);
-  
-  useEffect(() => {
-    console.log(`Setting up agreement listener for server: ${serverId}`);
-    const eventName = `agreement-required-${serverId}`;
-    console.log(`Listening for event: ${eventName}`);
-    
-    let isMounted = true;
-    
-    const unlistenPromise = listen<{ agreement: string }>(
-      eventName,
-      (event) => {
-        if (!isMounted) return;
-        console.log('✅ Agreement required event received in frontend!');
-        console.log('Event payload:', event.payload);
-        console.log('Agreement text length:', event.payload.agreement?.length || 0);
-        if (event.payload.agreement) {
-          console.log('Agreement text (first 100 chars):', event.payload.agreement.substring(0, 100));
-          setAgreementText(event.payload.agreement);
-        } else {
-          console.warn('Agreement text is missing from event payload');
-        }
-      }
-    );
-
-    unlistenPromise
-      .then((fn) => {
-        if (isMounted) {
-          agreementUnlistenRef.current = fn;
-        } else {
-          // Component unmounted before listener was set up, clean up immediately
-          try {
-            fn();
-          } catch (e) {
-            // Ignore cleanup errors
-          }
-        }
-      })
-      .catch((err) => {
-        console.error('Failed to set up agreement listener:', err);
-      });
-
-    return () => {
-      isMounted = false;
-      if (agreementUnlistenRef.current) {
-        try {
-          agreementUnlistenRef.current();
-          agreementUnlistenRef.current = null;
-        } catch (err) {
-          // Ignore cleanup errors
-        }
-      } else {
-        // Listener not set up yet, try to clean up via promise
-        unlistenPromise
-          .then((fn) => {
-            try {
-              fn();
-            } catch (e) {
-              // Ignore cleanup errors
-            }
-          })
-          .catch(() => {
-            // Ignore if promise was rejected
-          });
-      }
-    };
-  }, [serverId]);
 
   // Download banner after connection (only once)
   useEffect(() => {
@@ -484,122 +340,70 @@ export default function ServerWindow({ serverId, serverName, onClose }: ServerWi
     setMessageDialogUser(user);
   };
 
-  const handleSendPrivateMessage = async (userId: number, message: string) => {
-    try {
-      await invoke('send_private_message', {
+  // Use server handlers hook
+  const {
+    handleSendMessage,
+    handlePostBoard,
+    handleDownloadFile,
+    handleUploadFile,
+    handleSendPrivateMessage,
+    handleAcceptAgreement,
+    handleDeclineAgreement,
+    handleDisconnect,
+    handlePostNews,
+    handleNavigateNews,
+    handleNewsBack,
+    handleSelectArticle,
+  } = useServerHandlers({
         serverId,
-        userId,
-        message,
-      });
+    currentPath,
+    setMessage,
+    setSending,
+    setMessages,
+    setBoardMessage,
+    setPostingBoard,
+    setBoardPosts,
+    setDownloadProgress,
+    setUploadProgress,
+    setPrivateMessageHistory,
+    setAgreementText,
+    setNewsPath,
+    setNewsArticles,
+    setComposerTitle,
+    setComposerBody,
+    setShowComposer,
+    setPostingNews,
+    clearFileCachePath,
+    onClose,
+  });
 
-      // Store message in history
-      setPrivateMessageHistory((prev) => {
-        const newHistory = new Map(prev);
-        const userMessages = newHistory.get(userId) || [];
-        newHistory.set(userId, [
-          ...userMessages,
-          {
-            text: message,
-            isOutgoing: true,
-            timestamp: new Date(),
-          },
-        ]);
-        return newHistory;
-      });
-    } catch (error) {
-      console.error('Failed to send private message:', error);
-      throw error;
-    }
-  };
-
-  const handleSendMessage = async (e: React.FormEvent) => {
+  // Wrapper functions for handlers that need additional state
+  const handleSendMessageWrapper = (e: React.FormEvent) => {
     e.preventDefault();
     if (!message.trim() || sending) return;
-
-    const messageText = message.trim();
-    setSending(true);
-    try {
-      await invoke('send_chat_message', {
-        serverId,
-        message: messageText,
-      });
-
-      // Add our own message to the chat display (server doesn't echo it back)
-      setMessages((prev) => [...prev, {
-        userId: 0, // Our own user ID (we don't know it yet, use 0)
-        userName: 'Me',
-        message: messageText,
-        timestamp: new Date(),
-      }]);
-
-      setMessage('');
-    } catch (error) {
-      console.error('Failed to send message:', error);
-      alert(`Failed to send message: ${error}`);
-    } finally {
-      setSending(false);
-    }
+    handleSendMessage(e, message, sending);
   };
 
-  const handlePostBoard = async (e: React.FormEvent) => {
+  const handlePostBoardWrapper = (e: React.FormEvent) => {
     e.preventDefault();
     if (!boardMessage.trim() || postingBoard) return;
-
-    const messageText = boardMessage.trim();
-    setPostingBoard(true);
-    try {
-      await invoke('post_message_board', {
-        serverId,
-        message: messageText,
-      });
-
-      // Refresh the board to show new post
-      const posts = await invoke<string[]>('get_message_board', {
-        serverId,
-      });
-      setBoardPosts(posts);
-
-      setBoardMessage('');
-    } catch (error) {
-      console.error('Failed to post to board:', error);
-      alert(`Failed to post to board: ${error}`);
-    } finally {
-      setPostingBoard(false);
-    }
+    handlePostBoard(e, boardMessage, postingBoard);
   };
 
-  const handleDownloadFile = async (fileName: string, fileSize: number) => {
-    try {
-      // Initialize progress for this file
-      setDownloadProgress((prev) => new Map(prev).set(fileName, 0));
+  const handleSelectArticleWrapper = async (article: NewsArticle) => {
+    await handleSelectArticle(article, setSelectedArticle, setArticleContent);
+  };
 
-      const result = await invoke<string>('download_file', {
-        serverId,
-        path: currentPath,
-        fileName,
-        fileSize,
-      });
+  const handleNavigateNewsWrapper = (category: NewsCategory) => {
+    handleNavigateNews(category);
+  };
 
-      // Remove this file from progress map
-      setDownloadProgress((prev) => {
-        const next = new Map(prev);
-        next.delete(fileName);
-        return next;
-      });
+  const handleNewsBackWrapper = () => {
+    handleNewsBack(newsPath);
+  };
 
-      alert(`✅ ${result}`);
-    } catch (error) {
-      console.error('Download failed:', error);
-
-      // Remove this file from progress map on error
-      setDownloadProgress((prev) => {
-        const next = new Map(prev);
-        next.delete(fileName);
-        return next;
-      });
-
-      alert(`❌ Download failed: ${error}`);
-    }
+  const handlePostNewsWrapper = async (e: React.FormEvent) => {
+    await handlePostNews(e, newsPath, composerTitle, composerBody, postingNews);
   };
 
   // Load news when News tab is activated or path changes
@@ -633,262 +437,36 @@ export default function ServerWindow({ serverId, serverName, onClose }: ServerWi
     }
   }, [activeTab, newsPath, serverId]);
 
-  const handleNavigateNews = (category: NewsCategory) => {
-    if (category.type === 2 || category.type === 3) {
-      // Bundle or category - navigate into it
-      setNewsPath(category.path);
-    }
-  };
-
-  const handleNewsBack = () => {
-    if (newsPath.length > 0) {
-      setNewsPath(newsPath.slice(0, -1));
-    }
-  };
-
-  const handleSelectArticle = async (article: NewsArticle) => {
-    setSelectedArticle(article);
-    setArticleContent('Loading...');
-
-    try {
-      const content = await invoke<string>('get_news_article_data', {
-        serverId,
-        articleId: article.id,
-        path: article.path,
-      });
-      setArticleContent(content);
-    } catch (error) {
-      console.error('Failed to get article content:', error);
-      setArticleContent(`Error loading article: ${error}`);
-    }
-  };
-
-  const handlePostNews = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!composerTitle.trim() || !composerBody.trim() || postingNews) return;
-
-    setPostingNews(true);
-    try {
-      await invoke('post_news_article', {
-        serverId,
-        title: composerTitle,
-        text: composerBody,
-        path: newsPath,
-        parentId: selectedArticle?.id || 0,
-      });
-
-      // Clear form and close composer
-      setComposerTitle('');
-      setComposerBody('');
-      setShowComposer(false);
-
-      // Refresh articles
-      const articles = await invoke<NewsArticle[]>('get_news_articles', {
-        serverId,
-        path: newsPath,
-      });
-      setNewsArticles(articles);
-    } catch (error) {
-      console.error('Failed to post news:', error);
-      const errorMsg = String(error);
-      // Check if it's a permission error
-      if (errorMsg.includes('Error code: 1') || errorMsg.toLowerCase().includes('permission')) {
-        alert(`Unable to post news article:\n\n${error}\n\nYou may not have posting privileges on this server. Contact the server administrator to request access.`);
-      } else {
-        alert(`Failed to post news: ${error}`);
-      }
-    } finally {
-      setPostingNews(false);
-    }
-  };
-
-  const handleAcceptAgreement = async () => {
-    try {
-      await invoke('accept_agreement', { serverId });
-      setAgreementText(null);
-    } catch (error) {
-      console.error('Failed to accept agreement:', error);
-      alert(`Failed to accept agreement: ${error}`);
-    }
-  };
-
-  const handleDeclineAgreement = () => {
-    setAgreementText(null);
-    // Optionally disconnect on decline
-    handleDisconnect();
-  };
-
-  const handleDisconnect = async () => {
-    try {
-      await invoke('disconnect_from_server', { serverId });
-      onClose();
-    } catch (error) {
-      console.error('Failed to disconnect:', error);
-    }
-  };
 
   return (
     <div className="fixed inset-0 bg-white dark:bg-gray-900 z-50 flex flex-col">
-      {/* Server Banner */}
-      {bannerUrl && (
-        <div className="bg-gray-900 dark:bg-black border-b border-gray-700 flex items-center justify-center py-2 px-4 min-h-[60px]">
-          <img
-            src={bannerUrl}
-            alt={`${serverName} Banner`}
-            className="max-w-full h-auto max-h-[60px] object-contain"
-            style={{ imageRendering: 'auto' }}
-            onLoad={() => {
-              console.log('✅ Banner image loaded successfully!');
-              console.log('  URL:', bannerUrl);
-            }}
-            onError={(e) => {
-              console.error('❌ Failed to load banner image');
-              console.error('  URL:', bannerUrl);
-              console.error('  Error event:', e);
-              // Hide banner on error
-              e.currentTarget.style.display = 'none';
-            }}
-          />
-        </div>
-      )}
+      <ServerBanner bannerUrl={bannerUrl} serverName={serverName} />
 
-      {/* Header */}
-      <div className="bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex-1">
-            <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
-              {serverInfo?.name || serverName}
-            </h1>
-            {serverInfo?.description && (
-              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                {serverInfo.description}
-              </p>
-            )}
-          </div>
-          <div className="flex items-center gap-3">
-            {serverInfo && (
-              <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                <span className="font-medium">{users.length}</span>
-                <span>user{users.length !== 1 ? 's' : ''}</span>
-              </div>
-            )}
-            <button
-              onClick={handleDisconnect}
-              className="px-3 py-1 text-sm text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 rounded hover:bg-red-50 dark:hover:bg-red-900/30"
-            >
-              Disconnect
-            </button>
-          </div>
-        </div>
-      </div>
+      <ServerHeader
+        serverName={serverName}
+        serverInfo={serverInfo}
+        users={users}
+        connectionStatus={connectionStatus}
+        onDisconnect={handleDisconnect}
+      />
 
       {/* Main content */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left sidebar - Tab navigation and Users */}
-        <div className="w-[200px] bg-gray-50 dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col">
-          {/* Tab navigation */}
-          <div className="flex flex-col gap-1 p-2">
-            <button
-              onClick={() => setActiveTab('chat')}
-              className={`flex items-center gap-2 px-2 py-2 rounded transition-colors ${
-                activeTab === 'chat'
-                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-200'
-              }`}
-              title="Public Chat"
-            >
-              <img 
-                src="/icons/section-chat.png" 
-                alt="Chat" 
-                className="w-5 h-5"
-                onError={(e) => {
-                  const target = e.target as HTMLImageElement;
-                  target.style.display = 'none';
-                }}
-              />
-              <span className="text-sm font-medium">Chat</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('board')}
-              className={`flex items-center gap-2 px-2 py-2 rounded transition-colors ${
-                activeTab === 'board'
-                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-200'
-              }`}
-              title="Message Board"
-            >
-              <img 
-                src="/icons/section-board.png" 
-                alt="Board" 
-                className="w-5 h-5"
-                onError={(e) => {
-                  const target = e.target as HTMLImageElement;
-                  target.style.display = 'none';
-                }}
-              />
-              <span className="text-sm font-medium">Board</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('news')}
-              className={`flex items-center gap-2 px-2 py-2 rounded transition-colors ${
-                activeTab === 'news'
-                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-200'
-              }`}
-              title="News"
-            >
-              <img 
-                src="/icons/section-news.png" 
-                alt="News" 
-                className="w-5 h-5"
-                onError={(e) => {
-                  const target = e.target as HTMLImageElement;
-                  target.style.display = 'none';
-                }}
-              />
-              <span className="text-sm font-medium">News</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('files')}
-              className={`flex items-center gap-2 px-2 py-2 rounded transition-colors ${
-                activeTab === 'files'
-                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-200'
-              }`}
-              title="Files"
-            >
-              <img 
-                src="/icons/section-files.png" 
-                alt="Files" 
-                className="w-5 h-5"
-                onError={(e) => {
-                  const target = e.target as HTMLImageElement;
-                  target.style.display = 'none';
-                }}
-              />
-              <span className="text-sm font-medium">Files</span>
-            </button>
-          </div>
-
-          {/* Divider */}
-          <div className="border-t border-gray-200 dark:border-gray-700 my-2"></div>
-
-          {/* User list below tabs */}
-          <div className="flex-1 overflow-auto">
-            <UserList
-              users={users}
-              unreadCounts={unreadCounts}
-              onUserClick={handleUserClick}
-            />
-          </div>
-        </div>
+        <ServerSidebar
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          users={users}
+          onUserClick={handleUserClick}
+          onOpenMessageDialog={handleOpenMessageDialog}
+          unreadCounts={unreadCounts}
+        />
 
         {/* Main area with content */}
         <div className="flex-1 flex overflow-hidden">
           {/* Content area */}
           <div className="flex-1 overflow-auto">
-            {/* Chat view */}
-            {activeTab === 'chat' && (
+          {/* Chat view */}
+          {activeTab === 'chat' && (
             <ChatTab
               serverName={serverName}
               messages={messages}
@@ -897,26 +475,26 @@ export default function ServerWindow({ serverId, serverName, onClose }: ServerWi
               bannerUrl={bannerUrl}
               agreementText={agreementText}
               onMessageChange={setMessage}
-              onSendMessage={handleSendMessage}
+              onSendMessage={handleSendMessageWrapper}
               onAcceptAgreement={handleAcceptAgreement}
               onDeclineAgreement={handleDeclineAgreement}
             />
-            )}
+          )}
 
-            {/* Board view */}
-            {activeTab === 'board' && (
+          {/* Board view */}
+          {activeTab === 'board' && (
             <BoardTab
               boardPosts={boardPosts}
               loadingBoard={loadingBoard}
               boardMessage={boardMessage}
               postingBoard={postingBoard}
               onBoardMessageChange={setBoardMessage}
-              onPostBoard={handlePostBoard}
+              onPostBoard={handlePostBoardWrapper}
             />
-            )}
+          )}
 
-            {/* News view */}
-            {activeTab === 'news' && (
+          {/* News view */}
+          {activeTab === 'news' && (
             <NewsTab
               newsPath={newsPath}
               newsCategories={newsCategories}
@@ -929,24 +507,52 @@ export default function ServerWindow({ serverId, serverName, onClose }: ServerWi
               composerBody={composerBody}
               postingNews={postingNews}
               onNewsPathChange={setNewsPath}
-              onNewsBack={handleNewsBack}
-              onNavigateNews={handleNavigateNews}
-              onSelectArticle={handleSelectArticle}
+              onNewsBack={handleNewsBackWrapper}
+              onNavigateNews={handleNavigateNewsWrapper}
+              onSelectArticle={handleSelectArticleWrapper}
               onToggleComposer={() => setShowComposer(!showComposer)}
               onComposerTitleChange={setComposerTitle}
               onComposerBodyChange={setComposerBody}
-              onPostNews={handlePostNews}
+              onPostNews={handlePostNewsWrapper}
             />
-            )}
+          )}
 
-            {/* Files view */}
-            {activeTab === 'files' && (
+          {/* Files view */}
+          {activeTab === 'files' && (
             <FilesTab
               files={files}
               currentPath={currentPath}
               downloadProgress={downloadProgress}
+              uploadProgress={uploadProgress}
               onPathChange={setCurrentPath}
               onDownloadFile={handleDownloadFile}
+              onUploadFile={handleUploadFile}
+              onRefresh={() => {
+                // Clear cache for current path and fetch fresh data
+                clearFileCachePath(serverId, currentPath);
+                // Fetch fresh data
+                invoke('get_file_list', {
+                  serverId,
+                  path: currentPath,
+                }).catch((error) => {
+                  console.error('Failed to refresh file list:', error);
+                });
+              }}
+              getAllCachedFiles={() => {
+                // Get all cached files from all paths
+                const cache = useAppStore.getState().fileCache.get(serverId);
+                if (!cache) return [];
+                
+                const allFiles: Array<{ file: FileItem; path: string[] }> = [];
+                for (const [pathKey, cachedFiles] of cache.entries()) {
+                  // Filter out empty path keys and handle root path
+                  const path = pathKey && pathKey.trim() ? pathKey.split('/').filter((p: string) => p) : [];
+                  for (const file of cachedFiles) {
+                    allFiles.push({ file, path });
+                  }
+                }
+                return allFiles;
+              }}
             />
             )}
           </div>

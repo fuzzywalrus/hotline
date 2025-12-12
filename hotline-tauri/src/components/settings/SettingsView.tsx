@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import GeneralSettingsTab from './GeneralSettingsTab';
 import IconSettingsTab from './IconSettingsTab';
+import SoundSettingsTab from './SoundSettingsTab';
+import KeyboardShortcutsTab from './KeyboardShortcutsTab';
 
-type SettingsTab = 'general' | 'icon';
+type SettingsTab = 'general' | 'icon' | 'sound' | 'shortcuts';
 
 interface SettingsViewProps {
   onClose: () => void;
@@ -49,12 +51,34 @@ export default function SettingsView({ onClose }: SettingsViewProps) {
           >
             Icon
           </button>
+          <button
+            onClick={() => setActiveTab('sound')}
+            className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'sound'
+                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
+            }`}
+          >
+            Sound
+          </button>
+          <button
+            onClick={() => setActiveTab('shortcuts')}
+            className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'shortcuts'
+                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
+            }`}
+          >
+            Shortcuts
+          </button>
         </div>
 
         {/* Content */}
         <div className="flex-1 overflow-auto">
           {activeTab === 'general' && <GeneralSettingsTab />}
           {activeTab === 'icon' && <IconSettingsTab />}
+          {activeTab === 'sound' && <SoundSettingsTab />}
+          {activeTab === 'shortcuts' && <KeyboardShortcutsTab />}
         </div>
       </div>
     </div>
