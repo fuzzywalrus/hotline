@@ -41,6 +41,9 @@ pub fn run() {
             commands::get_bookmarks,
             commands::save_bookmark,
             commands::delete_bookmark,
+            commands::get_pending_agreement,
+            commands::accept_agreement,
+            commands::download_banner,
             commands::test_connection,
         ])
         .run(tauri::generate_context!())

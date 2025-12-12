@@ -13,6 +13,7 @@ pub struct AppState {
     bookmarks: Arc<RwLock<Vec<Bookmark>>>,
     bookmarks_path: PathBuf,
     app_handle: AppHandle,
+    pending_agreements: Arc<RwLock<HashMap<String, String>>>, // server_id -> agreement_text
 }
 
 impl AppState {
@@ -32,6 +33,7 @@ impl AppState {
             bookmarks: Arc::new(RwLock::new(bookmarks)),
             bookmarks_path,
             app_handle,
+            pending_agreements: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -75,6 +77,7 @@ impl AppState {
         // Start event forwarding task
         let app_handle = self.app_handle.clone();
         let server_id_clone = server_id.clone();
+        let state_clone = Arc::clone(&self.pending_agreements);
         tokio::spawn(async move {
             while let Some(event) = event_rx.recv().await {
                 use crate::protocol::client::HotlineEvent;
@@ -116,8 +119,24 @@ impl AppState {
                         println!("Server message: {}", msg);
                     }
                     HotlineEvent::AgreementRequired(agreement) => {
-                        println!("Agreement required: {}", agreement);
-                        // TODO: Show agreement UI
+                        println!("State: Received AgreementRequired event, agreement length: {}", agreement.len());
+                        
+                        // Store agreement in pending_agreements
+                        {
+                            let mut pending = state_clone.write().await;
+                            pending.insert(server_id_clone.clone(), agreement.clone());
+                            println!("State: Stored agreement for server {}", server_id_clone);
+                        }
+                        
+                        let payload = serde_json::json!({
+                            "agreement": agreement,
+                        });
+                        let event_name = format!("agreement-required-{}", server_id_clone);
+                        println!("State: Emitting event: {}", event_name);
+                        match app_handle.emit(&event_name, payload) {
+                            Ok(_) => println!("State: Event emitted successfully"),
+                            Err(e) => println!("State: Failed to emit event: {:?}", e),
+                        }
                     }
                     HotlineEvent::FileList { files } => {
                         let payload = serde_json::json!({
@@ -182,6 +201,59 @@ impl AppState {
 
         if let Some(client) = clients.get(server_id) {
             client.send_private_message(user_id, message).await
+        } else {
+            Err("Server not connected".to_string())
+        }
+    }
+
+    pub async fn get_pending_agreement(&self, server_id: &str) -> Option<String> {
+        let pending = self.pending_agreements.read().await;
+        pending.get(server_id).cloned()
+    }
+
+    pub async fn accept_agreement(&self, server_id: &str) -> Result<(), String> {
+        let clients = self.clients.read().await;
+
+        if let Some(client) = clients.get(server_id) {
+            // Remove agreement from pending after acceptance
+            {
+                let mut pending = self.pending_agreements.write().await;
+                pending.remove(server_id);
+            }
+            client.accept_agreement().await
+        } else {
+            Err("Server not connected".to_string())
+        }
+    }
+
+    pub async fn download_banner(&self, server_id: &str) -> Result<String, String> {
+        let clients = self.clients.read().await;
+
+        if let Some(client) = clients.get(server_id) {
+            // Get reference number and transfer size
+            let (reference_number, transfer_size) = client.download_banner().await?;
+            
+            println!("Banner download info - reference: {}, transferSize: {}", reference_number, transfer_size);
+
+            // Download banner as raw image data (not FILP format)
+            let file_data = client.download_banner_raw(reference_number, transfer_size).await?;
+
+            println!("Banner download complete, {} bytes received", file_data.len());
+
+            // Save banner to app data directory
+            let banner_path = self.bookmarks_path.parent()
+                .ok_or("Failed to get app data directory".to_string())?
+                .join(format!("banner-{}.png", server_id));
+            
+            std::fs::write(&banner_path, &file_data)
+                .map_err(|e| format!("Failed to save banner: {}", e))?;
+
+            println!("Banner saved to: {:?}", banner_path);
+
+            // Return path as string
+            banner_path.to_str()
+                .ok_or("Failed to convert banner path to string".to_string())
+                .map(|s| s.to_string())
         } else {
             Err("Server not connected".to_string())
         }

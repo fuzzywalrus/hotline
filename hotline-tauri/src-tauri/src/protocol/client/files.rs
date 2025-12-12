@@ -392,4 +392,131 @@ impl HotlineClient {
             creator,
         })
     }
+
+    pub async fn download_banner(&self) -> Result<(u32, u32), String> {
+        println!("Requesting banner download...");
+
+        let transaction = Transaction::new(self.next_transaction_id(), TransactionType::DownloadBanner);
+        let encoded = transaction.encode();
+        let transaction_id = transaction.id;
+
+        // Create channel to receive reply
+        let (tx, mut rx) = mpsc::channel(1);
+        {
+            let mut pending = self.pending_transactions.write().await;
+            pending.insert(transaction_id, tx);
+        }
+
+        // Send transaction
+        println!("Sending DownloadBanner transaction...");
+        let mut write_guard = self.write_half.lock().await;
+        let write_stream = write_guard
+            .as_mut()
+            .ok_or("Not connected".to_string())?;
+
+        write_stream
+            .write_all(&encoded)
+            .await
+            .map_err(|e| format!("Failed to send DownloadBanner: {}", e))?;
+
+        write_stream
+            .flush()
+            .await
+            .map_err(|e| format!("Failed to flush: {}", e))?;
+
+        drop(write_guard);
+
+        // Wait for reply
+        println!("Waiting for DownloadBanner reply...");
+        let reply = tokio::time::timeout(Duration::from_secs(10), rx.recv())
+            .await
+            .map_err(|_| "Timeout waiting for banner reply".to_string())?
+            .ok_or("Channel closed".to_string())?;
+
+        println!("DownloadBanner reply received: error_code={}", reply.error_code);
+
+        if reply.error_code != 0 {
+            let error_msg = reply
+                .get_field(FieldType::ErrorText)
+                .and_then(|f| f.to_string().ok())
+                .unwrap_or_else(|| format!("Error code: {}", reply.error_code));
+            return Err(format!("Banner download failed: {}", error_msg));
+        }
+
+        // Get reference number and transfer size from reply
+        let reference_number = reply
+            .get_field(FieldType::ReferenceNumber)
+            .and_then(|f| f.to_u32().ok())
+            .ok_or("No reference number in reply".to_string())?;
+
+        let transfer_size = reply
+            .get_field(FieldType::TransferSize)
+            .and_then(|f| f.to_u32().ok())
+            .ok_or("No transfer size in reply".to_string())?;
+
+        println!("Banner reference number: {}, transfer size: {} bytes", reference_number, transfer_size);
+
+        Ok((reference_number, transfer_size))
+    }
+
+    /// Download banner as raw image data (not FILP format)
+    /// Banners are sent as raw image data after the HTXF handshake
+    pub async fn download_banner_raw(&self, reference_number: u32, transfer_size: u32) -> Result<Vec<u8>, String> {
+        println!("Starting banner download (raw data) with reference: {}, size: {} bytes", reference_number, transfer_size);
+
+        // Open a new TCP connection to the server for file transfer
+        let transfer_port = self.bookmark.port + 1;
+        let addr = format!("{}:{}", self.bookmark.address, transfer_port);
+        println!("Connecting to file transfer port: {}", transfer_port);
+
+        let mut transfer_stream = TcpStream::connect(&addr)
+            .await
+            .map_err(|e| format!("Failed to connect for banner transfer: {}", e))?;
+
+        println!("Banner transfer connection established");
+
+        // Send file transfer handshake (same as regular file transfer)
+        let mut handshake = Vec::with_capacity(16);
+        handshake.extend_from_slice(FILE_TRANSFER_ID); // "HTXF"
+        handshake.extend_from_slice(&reference_number.to_be_bytes());
+        handshake.extend_from_slice(&0u32.to_be_bytes());
+        handshake.extend_from_slice(&0u32.to_be_bytes());
+
+        println!("Sending banner transfer handshake ({} bytes): {:02X?}", handshake.len(), &handshake);
+        transfer_stream
+            .write_all(&handshake)
+            .await
+            .map_err(|e| format!("Failed to send banner handshake: {}", e))?;
+
+        transfer_stream
+            .flush()
+            .await
+            .map_err(|e| format!("Failed to flush handshake: {}", e))?;
+
+        println!("Banner handshake sent, reading raw image data...");
+
+        // Read raw data directly (no FILP header for banners)
+        // The server sends the image data immediately after the handshake
+        let chunk_size = 65536; // 64KB chunks
+        let mut banner_data = Vec::with_capacity(transfer_size as usize);
+        let mut bytes_read = 0u32;
+
+        while bytes_read < transfer_size {
+            let remaining = transfer_size - bytes_read;
+            let to_read = std::cmp::min(remaining, chunk_size) as usize;
+            let mut chunk = vec![0u8; to_read];
+
+            transfer_stream
+                .read_exact(&mut chunk)
+                .await
+                .map_err(|e| format!("Failed to read banner data: {}", e))?;
+
+            bytes_read += to_read as u32;
+            banner_data.extend_from_slice(&chunk);
+        }
+
+        println!("Banner download complete: {} bytes received", banner_data.len());
+
+        Ok(banner_data)
+    }
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import MessageDialog from '../chat/MessageDialog';
@@ -102,6 +102,35 @@ export default function ServerWindow({ serverId, serverName, onClose }: ServerWi
   const [userInfoDialogUser, setUserInfoDialogUser] = useState<User | null>(null);
   const [unreadCounts, setUnreadCounts] = useState<Map<number, number>>(new Map());
   const [privateMessageHistory, setPrivateMessageHistory] = useState<Map<number, PrivateMessage[]>>(new Map());
+  const [agreementText, setAgreementText] = useState<string | null>(null);
+  const [bannerUrl, setBannerUrl] = useState<string | null>(null);
+
+  // Debug: log when bannerUrl changes
+  useEffect(() => {
+    if (bannerUrl) {
+      console.log('🎨 Banner URL state updated:', bannerUrl);
+    } else {
+      console.log('🎨 Banner URL state is null');
+    }
+  }, [bannerUrl]);
+
+  // Check for pending agreement when component mounts
+  useEffect(() => {
+    const checkPendingAgreement = async () => {
+      try {
+        const pending = await invoke<string | null>('get_pending_agreement', { serverId });
+        if (pending) {
+          console.log('✅ Found pending agreement on mount, length:', pending.length);
+          setAgreementText(pending);
+        } else {
+          console.log('No pending agreement found on mount');
+        }
+      } catch (error) {
+        console.error('Failed to check pending agreement:', error);
+      }
+    };
+    checkPendingAgreement();
+  }, [serverId]);
 
   // Listen for incoming chat messages
   useEffect(() => {
@@ -113,7 +142,9 @@ export default function ServerWindow({ serverId, serverName, onClose }: ServerWi
     });
 
     return () => {
-      unlisten.then((fn) => fn());
+      unlisten.then((fn) => fn()).catch(() => {
+        // Ignore cleanup errors
+      });
     };
   }, [serverId]);
 
@@ -139,7 +170,9 @@ export default function ServerWindow({ serverId, serverName, onClose }: ServerWi
     );
 
     return () => {
-      unlisten.then((fn) => fn());
+      unlisten.then((fn) => fn()).catch(() => {
+        // Ignore cleanup errors
+      });
     };
   }, [serverId]);
 
@@ -180,7 +213,9 @@ export default function ServerWindow({ serverId, serverName, onClose }: ServerWi
     );
 
     return () => {
-      unlisten.then((fn) => fn());
+      unlisten.then((fn) => fn()).catch(() => {
+        // Ignore cleanup errors
+      });
     };
   }, [serverId]);
 
@@ -234,9 +269,9 @@ export default function ServerWindow({ serverId, serverName, onClose }: ServerWi
     );
 
     return () => {
-      unlistenJoin.then((fn) => fn());
-      unlistenLeave.then((fn) => fn());
-      unlistenChange.then((fn) => fn());
+      unlistenJoin.then((fn) => fn()).catch(() => {});
+      unlistenLeave.then((fn) => fn()).catch(() => {});
+      unlistenChange.then((fn) => fn()).catch(() => {});
     };
   }, [serverId]);
 
@@ -274,7 +309,9 @@ export default function ServerWindow({ serverId, serverName, onClose }: ServerWi
     );
 
     return () => {
-      unlisten.then((fn) => fn());
+      unlisten.then((fn) => fn()).catch(() => {
+        // Ignore cleanup errors
+      });
     };
   }, [serverId, messageDialogUser]);
 
@@ -289,9 +326,129 @@ export default function ServerWindow({ serverId, serverName, onClose }: ServerWi
     );
 
     return () => {
-      unlisten.then((fn) => fn());
+      unlisten.then((fn) => fn()).catch(() => {
+        // Ignore cleanup errors
+      });
     };
   }, [serverId]);
+
+  // Listen for agreement required events
+  const agreementUnlistenRef = useRef<(() => void) | null>(null);
+  
+  useEffect(() => {
+    console.log(`Setting up agreement listener for server: ${serverId}`);
+    const eventName = `agreement-required-${serverId}`;
+    console.log(`Listening for event: ${eventName}`);
+    
+    let isMounted = true;
+    
+    const unlistenPromise = listen<{ agreement: string }>(
+      eventName,
+      (event) => {
+        if (!isMounted) return;
+        console.log('✅ Agreement required event received in frontend!');
+        console.log('Event payload:', event.payload);
+        console.log('Agreement text length:', event.payload.agreement?.length || 0);
+        if (event.payload.agreement) {
+          console.log('Agreement text (first 100 chars):', event.payload.agreement.substring(0, 100));
+          setAgreementText(event.payload.agreement);
+        } else {
+          console.warn('Agreement text is missing from event payload');
+        }
+      }
+    );
+
+    unlistenPromise
+      .then((fn) => {
+        if (isMounted) {
+          agreementUnlistenRef.current = fn;
+        } else {
+          // Component unmounted before listener was set up, clean up immediately
+          try {
+            fn();
+          } catch (e) {
+            // Ignore cleanup errors
+          }
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to set up agreement listener:', err);
+      });
+
+    return () => {
+      isMounted = false;
+      if (agreementUnlistenRef.current) {
+        try {
+          agreementUnlistenRef.current();
+          agreementUnlistenRef.current = null;
+        } catch (err) {
+          // Ignore cleanup errors
+        }
+      } else {
+        // Listener not set up yet, try to clean up via promise
+        unlistenPromise
+          .then((fn) => {
+            try {
+              fn();
+            } catch (e) {
+              // Ignore cleanup errors
+            }
+          })
+          .catch(() => {
+            // Ignore if promise was rejected
+          });
+      }
+    };
+  }, [serverId]);
+
+  // Download banner after connection (only once)
+  useEffect(() => {
+    let cancelled = false;
+    
+    const downloadBanner = async () => {
+      try {
+        console.log('Starting banner download for server:', serverId);
+        // Wait a bit for connection to stabilize
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        if (cancelled) {
+          console.log('Banner download cancelled (component unmounted)');
+          return;
+        }
+        
+        console.log('Requesting banner download from backend...');
+        const dataUrl = await invoke<string>('download_banner', { serverId });
+        console.log('Banner data URL received, length:', dataUrl.length);
+        
+        if (cancelled) {
+          console.log('Banner download cancelled after receiving data');
+          return;
+        }
+        
+        console.log('✅ Banner downloaded and converted to data URL!');
+        console.log('  Data URL preview:', dataUrl.substring(0, 50) + '...');
+        
+        if (!cancelled) {
+          setBannerUrl(dataUrl);
+          console.log('✅ Banner URL set in state');
+        }
+      } catch (error) {
+        console.error('❌ Banner download failed:', error);
+        // Banner download failure is not critical, just log it
+      }
+    };
+
+    // Only download if we have users (connection is established) and haven't downloaded yet
+    if (users.length > 0 && !bannerUrl) {
+      console.log('Conditions met for banner download: users.length =', users.length, 'bannerUrl =', bannerUrl);
+      downloadBanner();
+    } else {
+      console.log('Banner download skipped: users.length =', users.length, 'bannerUrl =', bannerUrl);
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [serverId, users.length]);
 
   const handleUserClick = (user: User) => {
     // Open user info dialog
@@ -527,6 +684,22 @@ export default function ServerWindow({ serverId, serverName, onClose }: ServerWi
     }
   };
 
+  const handleAcceptAgreement = async () => {
+    try {
+      await invoke('accept_agreement', { serverId });
+      setAgreementText(null);
+    } catch (error) {
+      console.error('Failed to accept agreement:', error);
+      alert(`Failed to accept agreement: ${error}`);
+    }
+  };
+
+  const handleDeclineAgreement = () => {
+    setAgreementText(null);
+    // Optionally disconnect on decline
+    handleDisconnect();
+  };
+
   const handleDisconnect = async () => {
     try {
       await invoke('disconnect_from_server', { serverId });
@@ -538,6 +711,29 @@ export default function ServerWindow({ serverId, serverName, onClose }: ServerWi
 
   return (
     <div className="fixed inset-0 bg-white dark:bg-gray-900 z-50 flex flex-col">
+      {/* Server Banner */}
+      {bannerUrl && (
+        <div className="bg-gray-900 dark:bg-black border-b border-gray-700 flex items-center justify-center py-2 px-4 min-h-[60px]">
+          <img
+            src={bannerUrl}
+            alt={`${serverName} Banner`}
+            className="max-w-full h-auto max-h-[60px] object-contain"
+            style={{ imageRendering: 'auto' }}
+            onLoad={() => {
+              console.log('✅ Banner image loaded successfully!');
+              console.log('  URL:', bannerUrl);
+            }}
+            onError={(e) => {
+              console.error('❌ Failed to load banner image');
+              console.error('  URL:', bannerUrl);
+              console.error('  Error event:', e);
+              // Hide banner on error
+              e.currentTarget.style.display = 'none';
+            }}
+          />
+        </div>
+      )}
+
       {/* Header */}
       <div className="bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3 flex items-center justify-between">
         <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -621,8 +817,12 @@ export default function ServerWindow({ serverId, serverName, onClose }: ServerWi
               messages={messages}
               message={message}
               sending={sending}
+              bannerUrl={bannerUrl}
+              agreementText={agreementText}
               onMessageChange={setMessage}
               onSendMessage={handleSendMessage}
+              onAcceptAgreement={handleAcceptAgreement}
+              onDeclineAgreement={handleDeclineAgreement}
             />
           )}
 

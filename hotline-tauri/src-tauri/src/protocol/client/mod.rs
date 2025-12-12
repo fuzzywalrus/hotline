@@ -527,11 +527,45 @@ impl HotlineClient {
                 let _ = event_tx.send(HotlineEvent::NewMessageBoardPost(message));
             }
             TransactionType::ShowAgreement => {
-                let agreement = transaction
-                    .get_field(FieldType::ServerAgreement)
-                    .and_then(|f| f.to_string().ok())
-                    .unwrap_or_default();
+                println!("Received ShowAgreement transaction");
+                println!("Transaction has {} fields", transaction.fields.len());
+                
+                // Debug: print all fields
+                for (i, field) in transaction.fields.iter().enumerate() {
+                    println!("  Field {}: type={:?} ({}), size={} bytes", 
+                        i, field.field_type, field.field_type as u16, field.data.len());
+                    if field.data.len() > 0 && field.data.len() <= 200 {
+                        println!("    Data (hex): {:02X?}", &field.data);
+                        if let Ok(s) = field.to_string() {
+                            println!("    Data (string, first 100 chars): {}", s.chars().take(100).collect::<String>());
+                        }
+                    }
+                }
+                
+                // Try to get ServerAgreement field (type 150)
+                let agreement = if let Some(field) = transaction.get_field(FieldType::ServerAgreement) {
+                    println!("Found ServerAgreement field (type 150), size: {} bytes", field.data.len());
+                    field.to_string().unwrap_or_default()
+                } else {
+                    // Maybe it's in the Data field (type 101)?
+                    println!("ServerAgreement field not found, trying Data field...");
+                    if let Some(field) = transaction.get_field(FieldType::Data) {
+                        println!("Found Data field, size: {} bytes", field.data.len());
+                        field.to_string().unwrap_or_default()
+                    } else {
+                        // Try the first field if it's a string
+                        println!("Data field not found, trying first field...");
+                        if let Some(field) = transaction.fields.first() {
+                            println!("First field type: {:?}, size: {} bytes", field.field_type, field.data.len());
+                            field.to_string().unwrap_or_default()
+                        } else {
+                            String::new()
+                        }
+                    }
+                };
 
+                println!("Agreement text (first 100 chars): {}", agreement.chars().take(100).collect::<String>());
+                println!("Sending AgreementRequired event with {} characters", agreement.len());
                 let _ = event_tx.send(HotlineEvent::AgreementRequired(agreement));
             }
             TransactionType::NotifyUserChange => {
