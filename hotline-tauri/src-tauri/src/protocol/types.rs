@@ -2,6 +2,13 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BookmarkType {
+    Server,
+    Tracker,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Bookmark {
     pub id: String,
     pub name: String,
@@ -14,6 +21,17 @@ pub struct Bookmark {
     pub icon: Option<u16>,
     #[serde(default)]
     pub auto_connect: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bookmark_type: Option<BookmarkType>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TrackerServer {
+    pub address: String,
+    pub port: u16,
+    pub users: u16,
+    pub name: Option<String>,
+    pub description: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
