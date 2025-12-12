@@ -76,4 +76,30 @@ impl HotlineClient {
 
         Ok(())
     }
+
+    pub async fn accept_agreement(&self) -> Result<(), String> {
+        println!("Sending agreement acceptance...");
+
+        let transaction = Transaction::new(self.next_transaction_id(), TransactionType::Agreed);
+        let encoded = transaction.encode();
+
+        let mut write_guard = self.write_half.lock().await;
+        let write_stream = write_guard
+            .as_mut()
+            .ok_or("Not connected".to_string())?;
+
+        write_stream
+            .write_all(&encoded)
+            .await
+            .map_err(|e| format!("Failed to send agreement: {}", e))?;
+
+        write_stream
+            .flush()
+            .await
+            .map_err(|e| format!("Failed to flush: {}", e))?;
+
+        println!("Agreement accepted successfully");
+
+        Ok(())
+    }
 }

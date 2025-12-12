@@ -13,8 +13,37 @@ This file tracks completed features and implementation notes for the Tauri port.
 7. ✅ Message Board & News (get/post boards, browse categories, view/post articles)
 8. ✅ Files & transfers (browse, download with progress)
 9. ✅ Settings & Preferences (username, icon selection, persistent storage)
-10. ⏸️ File uploads
-11. ⏸️ Accounts, About
+10. ✅ Server Agreement & Banner (agreement dialog, banner download and display)
+11. ⏸️ File uploads
+12. ⏸️ Accounts, About
+
+---
+
+## Development Goals
+
+### High Priority Features
+- [x] Server agreement dialog and acceptance
+- [x] Server banner download and display
+- [ ] File uploads (complement to downloads)
+- [ ] Connection status indicators (connecting/connected/logged-in states)
+- [ ] Server info display (name, description, user count)
+
+### Medium Priority Features
+- [ ] Broadcast messages (server-wide announcements)
+- [ ] Sound settings tab (add to Settings)
+- [ ] About window
+- [ ] File preview (images, text files)
+- [ ] Transfer list window (active/completed transfers)
+
+### Lower Priority Features
+- [ ] Bonjour/mDNS server discovery
+- [ ] Tracker server fetch
+- [ ] Bookmark import/export
+- [ ] Bookmark reordering (drag & drop)
+- [ ] Server agreement persistence (remember accepted agreements)
+- [ ] Keyboard shortcuts
+- [ ] Context menus
+- [ ] Notification system
 
 ---
 
@@ -682,6 +711,86 @@ Created domain-specific components in proper folders:
 
 **Next task:** File uploads, server info display, or other features from porting guide
 
+### 2025-12-12: Server Agreement Dialog & Banner Display
+
+**What was completed:**
+- **Server Agreement Dialog**: Inline agreement display in chat view (matching Swift app behavior)
+- **Agreement Acceptance Protocol**: Transaction type 121 (Agreed) to accept server agreement
+- **Banner Download Protocol**: Transaction type 212 (DownloadBanner) to request server banner
+- **Banner Display**: Server banner displayed at top of server window
+- **Event Handling**: AgreementRequired event forwarded from backend to frontend with pending state storage
+
+**Agreement Dialog Implementation:**
+- Agreement displayed inline in chat view (not as modal dialog)
+- Banner shown above agreement text if available
+- Expandable view for long agreements (max height 340px, expand button if needed)
+- Accept/Decline buttons below agreement text
+- Monospace font for agreement text to preserve formatting
+- Chat input disabled while agreement is pending
+- Agreement stored in backend state to handle timing issues (event may arrive before component mounts)
+
+**Agreement Protocol:**
+- Backend detects `ShowAgreement` transaction (type 109)
+- Extracts agreement text from `Data` field (type 101) - servers may send in Data field instead of ServerAgreement field
+- Stores agreement in `pending_agreements` HashMap for retrieval on component mount
+- Emits `agreement-required-{serverId}` event to frontend
+- Frontend checks for pending agreement on mount and listens for events
+- On accept, sends `Agreed` transaction (type 121) - empty transaction, no fields needed
+- On decline, disconnects from server
+
+**Banner Download Implementation:**
+- `download_banner()` method sends DownloadBanner transaction (type 212)
+- Server replies with reference number and transfer size
+- **Key Fix**: Banners use raw image data transfer (not FILP format)
+  - Created `download_banner_raw()` method that reads raw data after HTXF handshake
+  - Regular file downloads use FILP format, but banners are sent as raw JPEG/PNG data
+- Saves banner to app data directory as `banner-{serverId}.png`
+- Converts banner to base64 data URL for frontend display (Tauri asset URLs don't work with app data paths)
+- Detects image format (JPEG/PNG/GIF) from file signature
+
+**Banner Display:**
+- Banner downloaded automatically after connection (when users list is populated)
+- Displayed at very top of server window (above header) with dark background
+- Max height 60px, centered, auto-scaling
+- Uses base64 data URL for reliable cross-platform display
+- Falls back gracefully if banner download fails (not all servers have banners)
+- Error handling with console logging for debugging
+
+**Event Listener Improvements:**
+- Fixed cleanup errors for all event listeners (added `.catch()` handlers)
+- Improved agreement listener with ref-based cleanup tracking
+- All listeners now handle cleanup gracefully without console errors
+
+**Files created/modified:**
+- `src/components/server/ServerWindow.tsx` - Added agreement state, event listener, banner state, pending agreement check
+- `src/components/chat/ChatTab.tsx` - Added agreement display inline with banner, Accept/Decline buttons
+- `src-tauri/src/protocol/client/chat.rs` - Added accept_agreement() method
+- `src-tauri/src/protocol/client/files.rs` - Added download_banner() and download_banner_raw() methods
+- `src-tauri/src/state/mod.rs` - Added pending_agreements HashMap, get_pending_agreement() method, accept_agreement() and download_banner() state methods, agreement event forwarding
+- `src-tauri/src/commands/mod.rs` - Added get_pending_agreement, accept_agreement and download_banner Tauri commands (download_banner returns base64 data URL)
+- `src-tauri/src/lib.rs` - Registered new commands
+- `src-tauri/Cargo.toml` - Added base64 dependency for data URL encoding
+
+**Implementation details:**
+- **Agreement Transaction**: Type 109 (ShowAgreement) from server, contains Data field (type 101) with agreement text
+- **Acceptance Transaction**: Type 121 (Agreed) - empty transaction, just sends transaction header
+- **Banner Transaction**: Type 212 (DownloadBanner) - returns ReferenceNumber and TransferSize fields
+- **Banner Transfer**: Raw image data after HTXF handshake (not FILP format like regular files)
+- **Banner Display**: Base64 data URL (`data:image/jpeg;base64,...`) for reliable cross-platform display
+- **Pending State**: Agreements stored in backend state to handle race condition where event arrives before component mounts
+
+**Testing status:**
+- ✅ Code compiles successfully
+- ✅ Agreement displays inline in chat view when server sends agreement
+- ✅ Agreement acceptance sends correct transaction
+- ✅ Banner download works with raw data format
+- ✅ Banner displays correctly using base64 data URL
+- ✅ Event listener cleanup errors resolved
+- ✅ Pending agreement retrieval works on component mount
+- ✅ Tested with live server (Apple Archive) - agreement and banner both working
+
+**Next task:** File uploads, server info display, or other features from porting guide
+
 ---
 
 ### Future: Tracker Features
@@ -718,9 +827,9 @@ Created domain-specific components in proper folders:
 - [x] News article threading
 
 ### Server Features
-- [ ] Server agreement dialog modal
+- [x] Server agreement dialog (inline in chat view)
 - [ ] Server info display (name, description, user count)
-- [ ] Server banner download and display
+- [x] Server banner download and display
 - [ ] Connection status indicators
 - [ ] Server statistics
 

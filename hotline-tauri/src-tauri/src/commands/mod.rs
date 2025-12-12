@@ -151,6 +151,66 @@ pub async fn post_news_article(
 }
 
 #[tauri::command]
+pub async fn get_pending_agreement(
+    server_id: String,
+    state: State<'_, AppState>,
+) -> Result<Option<String>, String> {
+    println!("Command: get_pending_agreement for {}", server_id);
+    Ok(state.get_pending_agreement(&server_id).await)
+}
+
+#[tauri::command]
+pub async fn accept_agreement(
+    server_id: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    println!("Command: accept_agreement for {}", server_id);
+    state.accept_agreement(&server_id).await
+}
+
+#[tauri::command]
+pub async fn download_banner(
+    server_id: String,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    println!("Command: download_banner for {}", server_id);
+    let banner_path = state.download_banner(&server_id).await?;
+    
+    // Read the file and convert to base64 data URL
+    let file_data = std::fs::read(&banner_path)
+        .map_err(|e| format!("Failed to read banner file: {}", e))?;
+    
+    println!("Banner file read, {} bytes", file_data.len());
+    
+    // Detect image format from file signature
+    let mime_type = if file_data.len() >= 4 && &file_data[0..4] == [0xFF, 0xD8, 0xFF, 0xE0] {
+        "image/jpeg"
+    } else if file_data.len() >= 8 && &file_data[0..8] == [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A] {
+        "image/png"
+    } else if file_data.len() >= 6 && &file_data[0..6] == [0x47, 0x49, 0x46, 0x38, 0x39, 0x61] {
+        "image/gif"
+    } else {
+        // Check for JPEG with different header
+        if file_data.len() >= 3 && &file_data[0..3] == [0xFF, 0xD8, 0xFF] {
+            "image/jpeg"
+        } else {
+            "image/png" // Default to PNG
+        }
+    };
+    
+    println!("Detected image format: {}", mime_type);
+    
+    // Convert to base64 data URL
+    use base64::{Engine as _, engine::general_purpose};
+    let base64 = general_purpose::STANDARD.encode(&file_data);
+    let data_url = format!("data:{};base64,{}", mime_type, base64);
+    
+    println!("Banner converted to data URL, length: {} bytes", data_url.len());
+    
+    Ok(data_url)
+}
+
+#[tauri::command]
 pub async fn test_connection(address: String, port: u16) -> Result<String, String> {
     println!("Command: test_connection to {}:{}", address, port);
 
