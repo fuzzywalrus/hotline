@@ -1,0 +1,594 @@
+// Hotline client implementation
+
+mod chat;
+mod files;
+mod news;
+mod users;
+
+use super::constants::{
+    FieldType, TransactionType, PROTOCOL_ID, PROTOCOL_SUBVERSION,
+    PROTOCOL_VERSION, SUBPROTOCOL_ID, TRANSACTION_HEADER_SIZE,
+};
+use super::transaction::{Transaction, TransactionField};
+use super::types::{Bookmark, ConnectionStatus, ServerInfo};
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::Arc;
+use std::time::Duration;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
+use tokio::net::TcpStream;
+use tokio::sync::{mpsc, Mutex, RwLock};
+use tokio::task::JoinHandle;
+
+// Event types that can be received from the server
+#[derive(Debug, Clone)]
+pub enum HotlineEvent {
+    ChatMessage { user_id: u16, user_name: String, message: String },
+    ServerMessage(String),
+    UserJoined { user_id: u16, user_name: String, icon: u16 },
+    UserLeft { user_id: u16 },
+    UserChanged { user_id: u16, user_name: String, icon: u16 },
+    AgreementRequired(String),
+    FileList { files: Vec<FileInfo> },
+    NewMessageBoardPost(String),
+}
+
+#[derive(Debug, Clone)]
+pub struct FileInfo {
+    pub name: String,
+    pub size: u32,
+    pub is_folder: bool,
+    pub file_type: String,
+    pub creator: String,
+}
+
+pub struct HotlineClient {
+    bookmark: Bookmark,
+    status: Arc<Mutex<ConnectionStatus>>,
+    read_half: Arc<Mutex<Option<OwnedReadHalf>>>,
+    write_half: Arc<Mutex<Option<OwnedWriteHalf>>>,
+    transaction_counter: Arc<AtomicU32>,
+    running: Arc<AtomicBool>,
+
+    // Event channel
+    event_tx: mpsc::UnboundedSender<HotlineEvent>,
+    pub event_rx: Arc<Mutex<Option<mpsc::UnboundedReceiver<HotlineEvent>>>>,
+
+    // Pending transactions (for request/reply pattern)
+    pending_transactions: Arc<RwLock<HashMap<u32, mpsc::Sender<Transaction>>>>,
+
+    // Background tasks
+    receive_task: Arc<Mutex<Option<JoinHandle<()>>>>,
+    keepalive_task: Arc<Mutex<Option<JoinHandle<()>>>>,
+}
+
+impl HotlineClient {
+    pub fn new(bookmark: Bookmark) -> Self {
+        let (event_tx, event_rx) = mpsc::unbounded_channel();
+
+        Self {
+            bookmark,
+            status: Arc::new(Mutex::new(ConnectionStatus::Disconnected)),
+            read_half: Arc::new(Mutex::new(None)),
+            write_half: Arc::new(Mutex::new(None)),
+            transaction_counter: Arc::new(AtomicU32::new(1)),
+            running: Arc::new(AtomicBool::new(false)),
+            event_tx,
+            event_rx: Arc::new(Mutex::new(Some(event_rx))),
+            pending_transactions: Arc::new(RwLock::new(HashMap::new())),
+            receive_task: Arc::new(Mutex::new(None)),
+            keepalive_task: Arc::new(Mutex::new(None)),
+        }
+    }
+
+    pub(crate) fn next_transaction_id(&self) -> u32 {
+        self.transaction_counter.fetch_add(1, Ordering::SeqCst)
+    }
+
+    pub async fn connect(&self) -> Result<(), String> {
+        println!("Connecting to {}:{}...", self.bookmark.address, self.bookmark.port);
+
+        // Update status
+        {
+            let mut status = self.status.lock().await;
+            *status = ConnectionStatus::Connecting;
+        }
+
+        // Connect TCP
+        let addr = format!("{}:{}", self.bookmark.address, self.bookmark.port);
+        let stream = TcpStream::connect(&addr)
+            .await
+            .map_err(|e| format!("Failed to connect: {}", e))?;
+
+        // Split stream into read and write halves for concurrent access
+        let (read_half, write_half) = stream.into_split();
+
+        // Store halves
+        {
+            let mut read_guard = self.read_half.lock().await;
+            *read_guard = Some(read_half);
+        }
+        {
+            let mut write_guard = self.write_half.lock().await;
+            *write_guard = Some(write_half);
+        }
+
+        // Update status
+        {
+            let mut status = self.status.lock().await;
+            *status = ConnectionStatus::Connected;
+        }
+
+        // Perform handshake
+        self.handshake().await?;
+
+        // Perform login
+        self.login().await?;
+
+        // Start background tasks
+        self.start_receive_loop().await;
+        self.start_keepalive().await;
+
+        // Request initial user list
+        self.get_user_list().await?;
+
+        println!("Successfully connected and logged in!");
+
+        Ok(())
+    }
+
+    async fn handshake(&self) -> Result<(), String> {
+        println!("Performing handshake...");
+
+        // Build handshake packet (12 bytes)
+        let mut handshake = Vec::with_capacity(12);
+        handshake.extend_from_slice(PROTOCOL_ID); // "TRTP"
+        handshake.extend_from_slice(SUBPROTOCOL_ID); // "HOTL"
+        handshake.extend_from_slice(&PROTOCOL_VERSION.to_be_bytes()); // 0x0001
+        handshake.extend_from_slice(&PROTOCOL_SUBVERSION.to_be_bytes()); // 0x0002
+
+        // Send handshake
+        {
+            let mut write_guard = self.write_half.lock().await;
+            let write_stream = write_guard
+                .as_mut()
+                .ok_or("Not connected".to_string())?;
+            write_stream
+                .write_all(&handshake)
+                .await
+                .map_err(|e| format!("Failed to send handshake: {}", e))?;
+        }
+
+        // Read response (8 bytes)
+        let mut response = [0u8; 8];
+        {
+            let mut read_guard = self.read_half.lock().await;
+            let read_stream = read_guard
+                .as_mut()
+                .ok_or("Not connected".to_string())?;
+            read_stream
+                .read_exact(&mut response)
+                .await
+                .map_err(|e| format!("Failed to read handshake response: {}", e))?;
+        }
+
+        // Verify response
+        if &response[0..4] != PROTOCOL_ID {
+            return Err("Invalid handshake response".to_string());
+        }
+
+        let error_code = u32::from_be_bytes([response[4], response[5], response[6], response[7]]);
+        if error_code != 0 {
+            return Err(format!("Handshake failed with error code {}", error_code));
+        }
+
+        println!("Handshake successful");
+
+        Ok(())
+    }
+
+    async fn login(&self) -> Result<(), String> {
+        println!("Logging in as {}...", self.bookmark.login);
+
+        // Update status
+        {
+            let mut status = self.status.lock().await;
+            *status = ConnectionStatus::LoggingIn;
+        }
+
+        // Build login transaction
+        let mut transaction = Transaction::new(self.next_transaction_id(), TransactionType::Login);
+
+        // Add fields
+        transaction.add_field(TransactionField::from_encoded_string(
+            FieldType::UserLogin,
+            &self.bookmark.login,
+        ));
+        transaction.add_field(TransactionField::from_encoded_string(
+            FieldType::UserPassword,
+            self.bookmark.password.as_deref().unwrap_or(""),
+        ));
+        transaction.add_field(TransactionField::from_u16(
+            FieldType::UserIconId,
+            self.bookmark.icon.unwrap_or(414),
+        ));
+        transaction.add_field(TransactionField::from_string(
+            FieldType::UserName,
+            &self.bookmark.name,
+        ));
+        transaction.add_field(TransactionField::from_u32(FieldType::VersionNumber, 123));
+
+        // Send transaction
+        let encoded = transaction.encode();
+        println!("Login transaction: {} bytes, fields={}", encoded.len(), transaction.fields.len());
+        println!("Transaction data: {:02X?}", &encoded[..std::cmp::min(40, encoded.len())]);
+
+        {
+            let mut write_guard = self.write_half.lock().await;
+            let write_stream = write_guard
+                .as_mut()
+                .ok_or("Not connected".to_string())?;
+            write_stream
+                .write_all(&encoded)
+                .await
+                .map_err(|e| format!("Failed to send login: {}", e))?;
+        }
+
+        println!("Login transaction sent, waiting for reply...");
+
+        // Read reply header
+        let mut header = [0u8; TRANSACTION_HEADER_SIZE];
+        println!("Reading login reply header...");
+        {
+            let mut read_guard = self.read_half.lock().await;
+            let read_stream = read_guard
+                .as_mut()
+                .ok_or("Not connected".to_string())?;
+            read_stream
+                .read_exact(&mut header)
+                .await
+                .map_err(|e| format!("Failed to read login reply: {}", e))?;
+        }
+
+        println!("Login reply header received: {:02X?}", &header);
+
+        // Check data size to see if we need to read more
+        let data_size = u32::from_be_bytes([header[16], header[17], header[18], header[19]]);
+        let mut full_data = header.to_vec();
+
+        // Read additional data if present
+        if data_size > 0 {
+            let mut additional_data = vec![0u8; data_size as usize];
+            let mut read_guard = self.read_half.lock().await;
+            let read_stream = read_guard
+                .as_mut()
+                .ok_or("Not connected".to_string())?;
+            read_stream
+                .read_exact(&mut additional_data)
+                .await
+                .map_err(|e| format!("Failed to read login reply data: {}", e))?;
+            full_data.extend(additional_data);
+        }
+
+        // Decode full transaction
+        let reply = Transaction::decode(&full_data).map_err(|e| format!("Failed to decode reply: {}", e))?;
+
+        println!("Login reply: error_code={}, fields={}", reply.error_code, reply.fields.len());
+
+        // Check for error
+        if reply.error_code != 0 {
+            let error_msg = reply
+                .get_field(FieldType::ErrorText)
+                .and_then(|f| f.to_string().ok())
+                .unwrap_or_else(|| format!("Error code: {}", reply.error_code));
+
+            return Err(format!("Login failed: {}", error_msg));
+        }
+
+        // Update status
+        {
+            let mut status = self.status.lock().await;
+            *status = ConnectionStatus::LoggedIn;
+        }
+
+        println!("Login successful!");
+
+        Ok(())
+    }
+
+    pub async fn disconnect(&self) -> Result<(), String> {
+        println!("Disconnecting...");
+
+        // Stop background tasks
+        self.running.store(false, Ordering::SeqCst);
+
+        // Wait for tasks to finish
+        if let Some(task) = self.receive_task.lock().await.take() {
+            task.abort();
+        }
+        if let Some(task) = self.keepalive_task.lock().await.take() {
+            task.abort();
+        }
+
+        // Close both halves of the stream
+        {
+            let mut read_guard = self.read_half.lock().await;
+            if let Some(read_half) = read_guard.take() {
+                drop(read_half);
+            }
+        }
+        {
+            let mut write_guard = self.write_half.lock().await;
+            if let Some(write_half) = write_guard.take() {
+                drop(write_half);
+            }
+        }
+
+        let mut status = self.status.lock().await;
+        *status = ConnectionStatus::Disconnected;
+
+        println!("Disconnected");
+
+        Ok(())
+    }
+
+    pub async fn get_status(&self) -> ConnectionStatus {
+        self.status.lock().await.clone()
+    }
+
+    // Start background task to receive messages from server
+    async fn start_receive_loop(&self) {
+        println!("Starting receive loop...");
+
+        self.running.store(true, Ordering::SeqCst);
+
+        let read_half = self.read_half.clone();
+        let running = self.running.clone();
+        let event_tx = self.event_tx.clone();
+        let pending_transactions = self.pending_transactions.clone();
+
+        let task = tokio::spawn(async move {
+            while running.load(Ordering::SeqCst) {
+                // Read transaction header
+                let mut header = [0u8; TRANSACTION_HEADER_SIZE];
+
+                let mut read_guard = read_half.lock().await;
+                let read_stream = match read_guard.as_mut() {
+                    Some(s) => s,
+                    None => break,
+                };
+
+                let read_result = read_stream.read_exact(&mut header).await;
+                drop(read_guard);
+
+                if read_result.is_err() {
+                    println!("Receive loop: connection closed");
+                    break;
+                }
+
+                // Decode transaction
+                let transaction = match Transaction::decode(&header) {
+                    Ok(t) => t,
+                    Err(e) => {
+                        eprintln!("Failed to decode transaction: {}", e);
+                        continue;
+                    }
+                };
+
+                // Read additional data if needed
+                let data_size = u32::from_be_bytes([header[16], header[17], header[18], header[19]]);
+                let mut full_data = header.to_vec();
+
+                if data_size > 0 {
+                    let mut additional_data = vec![0u8; data_size as usize];
+                    let mut read_guard = read_half.lock().await;
+                    let read_stream = match read_guard.as_mut() {
+                        Some(s) => s,
+                        None => break,
+                    };
+
+                    if read_stream.read_exact(&mut additional_data).await.is_err() {
+                        break;
+                    }
+                    drop(read_guard);
+
+                    full_data.extend(additional_data);
+                }
+
+                // Re-decode with full data
+                let transaction = match Transaction::decode(&full_data) {
+                    Ok(t) => t,
+                    Err(e) => {
+                        eprintln!("Failed to decode full transaction: {}", e);
+                        continue;
+                    }
+                };
+
+                println!("Received transaction: type={:?}, id={}, isReply={}, error_code={}, fields={}",
+                    transaction.transaction_type, transaction.id, transaction.is_reply,
+                    transaction.error_code, transaction.fields.len());
+
+                // Handle transaction
+                if transaction.is_reply == 1 {
+                    // This is a reply to one of our requests
+                    // Check for UserNameWithInfo fields (from GetUserNameList reply)
+                    let mut has_user_info = false;
+                    let mut has_file_info = false;
+                    let mut files = Vec::new();
+
+                    for field in &transaction.fields {
+                        if field.field_type == FieldType::UserNameWithInfo {
+                            has_user_info = true;
+                            if let Ok(user_info) = HotlineClient::parse_user_info(&field.data) {
+                                println!("Parsed user: {} (ID: {}, Icon: {})", user_info.1, user_info.0, user_info.2);
+                                let _ = event_tx.send(HotlineEvent::UserJoined {
+                                    user_id: user_info.0,
+                                    user_name: user_info.1,
+                                    icon: user_info.2,
+                                });
+                            }
+                        } else if field.field_type == FieldType::FileNameWithInfo {
+                            has_file_info = true;
+                            if let Ok(file_info) = HotlineClient::parse_file_info(&field.data) {
+                                println!("Parsed file: {} ({} bytes, folder: {})",
+                                    file_info.name, file_info.size, file_info.is_folder);
+                                files.push(file_info);
+                            }
+                        }
+                    }
+
+                    // Send file list event if we parsed any files
+                    if has_file_info {
+                        let _ = event_tx.send(HotlineEvent::FileList { files });
+                    }
+
+                    // If it's not a user/file list reply, forward to pending transaction handlers
+                    if !has_user_info && !has_file_info {
+                        let pending = pending_transactions.read().await;
+                        if let Some(tx) = pending.get(&transaction.id) {
+                            let _ = tx.send(transaction).await;
+                        }
+                    }
+                } else {
+                    // This is an unsolicited server message
+                    Self::handle_server_event(&transaction, &event_tx);
+                }
+            }
+
+            println!("Receive loop exited");
+        });
+
+        let mut receive_task = self.receive_task.lock().await;
+        *receive_task = Some(task);
+    }
+
+    fn handle_server_event(transaction: &Transaction, event_tx: &mpsc::UnboundedSender<HotlineEvent>) {
+        match transaction.transaction_type {
+            TransactionType::ChatMessage => {
+                // Extract chat message fields
+                let user_id = transaction
+                    .get_field(FieldType::UserId)
+                    .and_then(|f| f.to_u16().ok())
+                    .unwrap_or(0);
+                let user_name = transaction
+                    .get_field(FieldType::UserName)
+                    .and_then(|f| f.to_string().ok())
+                    .unwrap_or_default();
+                let message = transaction
+                    .get_field(FieldType::Data)
+                    .and_then(|f| f.to_string().ok())
+                    .unwrap_or_default();
+
+                let _ = event_tx.send(HotlineEvent::ChatMessage {
+                    user_id,
+                    user_name,
+                    message,
+                });
+            }
+            TransactionType::ServerMessage => {
+                let message = transaction
+                    .get_field(FieldType::Data)
+                    .and_then(|f| f.to_string().ok())
+                    .unwrap_or_default();
+
+                let _ = event_tx.send(HotlineEvent::ServerMessage(message));
+            }
+            TransactionType::NewMessage => {
+                // New message board post notification
+                let message = transaction
+                    .get_field(FieldType::Data)
+                    .and_then(|f| f.to_string().ok())
+                    .unwrap_or_default();
+
+                let _ = event_tx.send(HotlineEvent::NewMessageBoardPost(message));
+            }
+            TransactionType::ShowAgreement => {
+                let agreement = transaction
+                    .get_field(FieldType::ServerAgreement)
+                    .and_then(|f| f.to_string().ok())
+                    .unwrap_or_default();
+
+                let _ = event_tx.send(HotlineEvent::AgreementRequired(agreement));
+            }
+            TransactionType::NotifyUserChange => {
+                let user_id = transaction
+                    .get_field(FieldType::UserId)
+                    .and_then(|f| f.to_u16().ok())
+                    .unwrap_or(0);
+                let user_name = transaction
+                    .get_field(FieldType::UserName)
+                    .and_then(|f| f.to_string().ok())
+                    .unwrap_or_default();
+                let icon = transaction
+                    .get_field(FieldType::UserIconId)
+                    .and_then(|f| f.to_u16().ok())
+                    .unwrap_or(414);
+
+                let _ = event_tx.send(HotlineEvent::UserChanged {
+                    user_id,
+                    user_name,
+                    icon,
+                });
+            }
+            TransactionType::NotifyUserDelete => {
+                let user_id = transaction
+                    .get_field(FieldType::UserId)
+                    .and_then(|f| f.to_u16().ok())
+                    .unwrap_or(0);
+
+                let _ = event_tx.send(HotlineEvent::UserLeft { user_id });
+            }
+            _ => {
+                println!("Unhandled server event: {:?}", transaction.transaction_type);
+            }
+        }
+    }
+
+    // Start background task to send keep-alive messages
+    async fn start_keepalive(&self) {
+        println!("Starting keep-alive...");
+
+        let write_half = self.write_half.clone();
+        let running = self.running.clone();
+        let transaction_counter = self.transaction_counter.clone();
+
+        let task = tokio::spawn(async move {
+            while running.load(Ordering::SeqCst) {
+                tokio::time::sleep(Duration::from_secs(60)).await;
+
+                if !running.load(Ordering::SeqCst) {
+                    break;
+                }
+
+                // Send empty transaction as keep-alive
+                let transaction = Transaction::new(
+                    transaction_counter.fetch_add(1, Ordering::SeqCst),
+                    TransactionType::Reply,
+                );
+                let encoded = transaction.encode();
+
+                let mut write_guard = write_half.lock().await;
+                if let Some(write_stream) = write_guard.as_mut() {
+                    if write_stream.write_all(&encoded).await.is_err() {
+                        println!("Keep-alive failed, connection lost");
+                        break;
+                    }
+                    println!("Keep-alive sent");
+                } else {
+                    break;
+                }
+            }
+
+            println!("Keep-alive exited");
+        });
+
+        let mut keepalive_task = self.keepalive_task.lock().await;
+        *keepalive_task = Some(task);
+    }
+
+    pub async fn get_server_info(&self) -> Result<ServerInfo, String> {
+        // TODO: Implement server info retrieval from login reply
+        Err("Not implemented".to_string())
+    }
+}

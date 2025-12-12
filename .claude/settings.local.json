@@ -13,7 +13,10 @@
       "Bash(npm uninstall:*)",
       "Bash(test -f:*)",
       "Bash(cargo check:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(tree:*)",
+      "Bash(wc:*)",
+      "Bash(cargo clean:*)"
     ]
   }
 }
