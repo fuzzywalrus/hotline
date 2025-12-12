@@ -5,7 +5,7 @@ pub mod constants;
 pub mod transaction;
 pub mod types;
 
-pub use client::HotlineClient;
+pub use client::{HotlineClient, HotlineEvent, FileInfo};
 pub use constants::{DEFAULT_SERVER_PORT, FieldType, TransactionType};
 pub use transaction::{Transaction, TransactionField};
 pub use types::{Bookmark, ConnectionStatus, ServerInfo, User};
