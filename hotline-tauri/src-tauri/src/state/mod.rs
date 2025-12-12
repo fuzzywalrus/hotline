@@ -134,6 +134,13 @@ impl AppState {
                         });
                         let _ = app_handle.emit(&format!("message-board-post-{}", server_id_clone), payload);
                     }
+                    HotlineEvent::PrivateMessage { user_id, message } => {
+                        let payload = serde_json::json!({
+                            "userId": user_id,
+                            "message": message,
+                        });
+                        let _ = app_handle.emit(&format!("private-message-{}", server_id_clone), payload);
+                    }
                 }
             }
             println!("Event forwarding task ended for server {}", server_id_clone);
@@ -162,6 +169,16 @@ impl AppState {
 
         if let Some(client) = clients.get(server_id) {
             client.send_chat(message).await
+        } else {
+            Err("Server not connected".to_string())
+        }
+    }
+
+    pub async fn send_private_message(&self, server_id: &str, user_id: u16, message: String) -> Result<(), String> {
+        let clients = self.clients.read().await;
+
+        if let Some(client) = clients.get(server_id) {
+            client.send_private_message(user_id, message).await
         } else {
             Err("Server not connected".to_string())
         }

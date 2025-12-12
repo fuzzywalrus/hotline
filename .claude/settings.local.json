@@ -16,7 +16,9 @@
       "Bash(find:*)",
       "Bash(tree:*)",
       "Bash(wc:*)",
-      "Bash(cargo clean:*)"
+      "Bash(cargo clean:*)",
+      "Bash(npm run check:*)",
+      "Bash(npm run build:*)"
     ]
   }
 }
