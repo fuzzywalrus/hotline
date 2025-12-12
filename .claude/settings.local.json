@@ -18,7 +18,8 @@
       "Bash(wc:*)",
       "Bash(cargo clean:*)",
       "Bash(npm run check:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(grep:*)"
     ]
   }
 }
