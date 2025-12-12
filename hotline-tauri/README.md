@@ -1,177 +1,94 @@
 # Hotline Tauri
 
-A modern cross-platform Hotline client built with Tauri, React, TypeScript, and Rust.
+A cross-platform Tauri port of the Hotline client, aiming to mirror the macOS SwiftUI app on macOS, Windows, and Linux. The frontend is React + TypeScript (Vite), the backend is Rust + Tokio inside Tauri 1.x. This README reflects the current `hotline-tauri/` state and the macOS reference we are porting from.
 
-## Tech Stack
+## Current implementation
 
-- **Frontend**: React + TypeScript + Tailwind CSS
-- **State Management**: Zustand
-- **Backend**: Rust (async with Tokio)
-- **Framework**: Tauri v2
+- React shell with macOS-inspired window layout (sidebar for trackers/bookmarks + Bonjour placeholder, center server list, utility panel with credentials).
+- Default Hotline bookmarks and manual tracker fetch UI.
+- Rust tracker client command (`tracker_servers`) for live tracker listings.
+- Rust Hotline connect/login command (`connect_hotline_server`) with TRTP/HOTL handshake and credential obfuscation, returning server name/version.
+- Credentials form (login/password/username/icon) feeding Connect actions.
+- Build validated via `npm run build`.
 
-## Project Structure
+## Project structure (actual)
 
 ```
 hotline-tauri/
-├── src/                          # Frontend React app
-│   ├── components/               # React components
-│   │   ├── tracker/             # Tracker window components
-│   │   ├── server/              # Server window components
-│   │   ├── chat/                # Chat components
-│   │   ├── files/               # File browser components
-│   │   ├── news/                # News components
-│   │   ├── board/               # Message board components
-│   │   ├── users/               # Users list components
-│   │   ├── settings/            # Settings components
-│   │   └── common/              # Shared components
-│   ├── stores/                   # Zustand state stores
-│   │   ├── appStore.ts          # Global app state
-│   │   └── serverStore.ts       # Per-server state
-│   ├── types/                    # TypeScript type definitions
-│   │   └── index.ts             # Hotline protocol types
-│   └── lib/                      # Utility functions
-│
-├── src-tauri/                    # Rust backend
-│   └── src/
-│       ├── protocol/            # Hotline protocol implementation
-│       │   ├── mod.rs           # Protocol module
-│       │   ├── client.rs        # HotlineClient implementation
-│       │   └── types.rs         # Rust protocol types
-│       ├── state/               # Backend state management
-│       │   └── mod.rs           # AppState
-│       ├── commands/            # Tauri commands (frontend ↔ backend)
-│       │   └── mod.rs           # Command handlers
-│       └── lib.rs               # Main entry point
-│
-└── PORTING-GUIDE.md             # Feature map from Swift app
+├── src/               # React app (Vite)
+│   ├── App.tsx        # Main UI (tracker + server list + credentials)
+│   ├── App.css        # Layout/styling
+│   ├── styles.css     # Base styles
+│   └── main.tsx       # Entry point
+├── src-tauri/
+│   ├── src/
+│   │   ├── hotline_protocol.rs  # Protocol types + parsing helpers
+│   │   ├── tracker_client.rs    # Tracker fetch over TCP
+│   │   ├── hotline_client.rs    # Handshake/login client
+│   │   └── main.rs              # Tauri commands wiring
+│   └── tauri.conf.json          # Tauri config
+├── package.json
+├── Cargo.toml
+├── README.md (this file)
+└── PROGRESS.md / PORTING-GUIDE.md (planning/notes)
 ```
 
 ## Development
 
-### Prerequisites
+Prereqs: Node.js 18+, Rust stable, Tauri system deps.
 
-- Node.js 18+
-- Rust 1.70+
-- System dependencies for Tauri (varies by platform)
-
-### Running the app
-
-```bash
+Run dev (with Tauri IPC):
+```
 npm install
 npm run tauri dev
 ```
 
-The app will open in a native window with hot reload enabled for both Rust and React changes.
-
-### Building for production
-
-```bash
-npm run tauri build
+Build:
+```
+npm run build        # frontend only
+npm run tauri build  # full bundle
 ```
 
-## Current Status
+## Swift/macOS feature map (reference)
 
-### ✅ Completed
+This maps the existing Swift/macOS Hotline client features and their primary source files so we can mirror behavior (iOS/iPadOS ignored):
 
-- [x] Project scaffolding with Tauri + React + TypeScript
-- [x] Tailwind CSS configured
-- [x] Zustand state management set up
-- [x] Basic project structure (frontend & backend)
-- [x] TypeScript types for Hotline protocol
-- [x] Rust module structure (protocol, state, commands)
-- [x] Tauri commands for bookmarks and connections
-- [x] Basic Tracker window UI
-- [x] Connect dialog component
-- [x] Bookmark persistence (JSON storage in app data dir)
-- [x] Edit bookmarks with dialog
-- [x] Delete bookmarks with confirmation
-- [x] Auto-load bookmarks on startup
+- **App shell & windows** – `MacApp.swift` wires Tracker/Server/Update/About windows, banner panel toggle, CloudKit readiness.
+- **Updates** – `State/AppUpdate.swift` (GitHub releases, download/remind), `macOS/AppUpdateView.swift` UI.
+- **Trackers & bookmarks** – `macOS/Trackers/TrackerView.swift` (list, expand, search, reorder, delete, context menus, drop import); sheets in `TrackerBookmarkSheet.swift` / `ServerBookmarkSheet.swift`; row views in `TrackerBookmarkServerView.swift` / `TrackerItemView.swift`; data in `Models/Bookmark.swift`.
+- **Bonjour** – `State/BonjourState.swift` browse state; `macOS/Trackers/BonjourServerRow.swift`; Bonjour section inside `TrackerView`.
+- **Connect dialog** – `macOS/ConnectView.swift` address/login/password entry + bookmark save.
+- **Server navigation** – `macOS/ServerView.swift` `NavigationSplitView` hosting Chat/News/Board/Files/Users/Transfers, connection status, login trigger, transfer rows.
+- **Chat** – `macOS/Chat/ChatView.swift` (history, markers, search, banners); `ServerMessageView.swift`, `ServerAgreementView.swift`; `MessageView.swift` for DMs.
+- **Broadcasts** – `macOS/BroadcastMessageSheet.swift`.
+- **Message Board** – `macOS/Board/MessageBoardView.swift` + composer `MessageBoardEditorView.swift`.
+- **News** – `macOS/News/NewsView.swift` split list/view; `NewsItemView.swift`; `NewsEditorView.swift` for posts/replies.
+- **Files & transfers** – `macOS/Files/FilesView.swift` browser/actions; previews (`FilePreview*View.swift`), metadata sheet (`FileDetailsSheet.swift`), folder/new popover; transfers window `macOS/TransfersView.swift`; state in `State/FilePreviewState.swift` and `AppState.transfers`.
+- **Accounts & permissions** – `macOS/Accounts/AccountManagerView.swift` / `AccountDetailsView.swift`; driven by permission flags in `HotlineState`.
+- **Settings** – `macOS/Settings/SettingsView.swift` with tabs (`GeneralSettingsView.swift`, `IconSettingsView.swift`, `SoundSettingsView.swift`); prefs in `State/Preferences.swift`.
+- **About & branding** – `macOS/AboutView.swift`, `macOS/HotlinePanelView.swift`.
+- **State & networking** – `State/HotlineState.swift`, `State/ServerState.swift`, `State/AppState.swift`; protocol/client in `Hotline/HotlineClient.swift`, `Hotline/HotlineProtocol.swift`, `Hotline/HotlineTrackerClient.swift`; sockets in `Library/NetSocket/NetSocket.swift`.
 
-### 🚧 In Progress / Next Steps
+## Tauri port roadmap
 
-Based on the porting guide (`PORTING-GUIDE.md`), the implementation roadmap is:
+- **Windowing & layout**: Mirror Tracker window, About, Update, and banner panel behaviors; add server window split view (Chat/News/Board/Files/Users/Transfers).
+- **Tracker/Bonjour parity**: Persist bookmarks (add/edit/delete/reorder/import/export), integrate Bonjour discovery, keep tracker refresh/cancel states.
+- **Connect & session lifecycle**: Full Hotline client in Rust (handshake/login/keep-alive/event stream/reconnect/errors); connect dialog/bookmark save; session status bar.
+- **Chat & messaging**: Chat timeline with markers, search, Markdown, server messages; DMs; broadcasts; agreements.
+- **Users list**: Live list with idle/admin indicators and DM unread badges, context actions.
+- **Message Board & News**: Board view with post composer and permissions; News categories/articles split view with post/reply.
+- **Files & transfers**: File browser actions, previews, metadata, uploads/downloads, transfer list UI.
+- **Accounts & permissions**: Account manager gated by access bits; reflect permissions in affordances.
+- **Settings & branding**: Preferences UI (general/icon/sound), About window styling, app icons/bundle IDs, update flow.
+- **Infrastructure**: Port `HotlineState/ServerState/AppState` analogues; error toasts/banners; logging; cross-platform packaging and auto-update strategy.
 
-1. **Tracker & Bookmarks** (Priority 1) - ✅ **CORE COMPLETE**
-   - [x] Bookmark persistence (save/load from disk)
-   - [x] Bookmark management (edit, delete)
-   - [ ] Bookmark reordering (drag & drop) - *future enhancement*
-   - [ ] Import/export bookmarks - *future enhancement*
-   - [ ] Bonjour/mDNS server discovery - *future enhancement*
-   - [ ] Tracker server fetch - *future enhancement*
+## Porting notes
 
-2. **Protocol Implementation** (Priority 1)
-   - [ ] TCP socket connection
-   - [ ] Hotline handshake
-   - [ ] Login sequence
-   - [ ] Keep-alive mechanism
-   - [ ] Event receive loop
-   - [ ] Transaction send/await
-   - [ ] Protocol parsing/serialization
-
-3. **Server Connection** (Priority 2)
-   - [ ] Connection status management
-   - [ ] Server info display
-   - [ ] Agreement handling
-   - [ ] Permission parsing
-
-4. **Chat** (Priority 2)
-   - [ ] Global chat view
-   - [ ] Join/leave/disconnect markers
-   - [ ] Private messaging
-   - [ ] Broadcast messages
-   - [ ] Chat search
-
-5. **Users List** (Priority 3)
-   - [ ] Live user list
-   - [ ] Idle/admin indicators
-   - [ ] Unread DM badges
-   - [ ] User context menu
-
-6. **Files & Transfers** (Priority 3)
-   - [ ] File browser
-   - [ ] Upload/download
-   - [ ] Folder operations
-   - [ ] File previews
-   - [ ] Transfer progress UI
-
-7. **News & Message Board** (Priority 4)
-   - [ ] News category/article view
-   - [ ] Post/reply to news
-   - [ ] Message board view
-   - [ ] Post to board
-
-8. **Settings & Polish** (Priority 5)
-   - [ ] Preferences UI
-   - [ ] Icon selector
-   - [ ] Sound settings
-   - [ ] Auto-updates
-   - [ ] About window
-
-## Architecture Notes
-
-### State Management
-
-- **App-level state** (`appStore.ts`): Bookmarks, trackers, active servers, UI state
-- **Per-server state** (`serverStore.ts`): Chat, users, files, news, transfers - one store instance per connected server
-- **Rust state** (`state/mod.rs`): Active connections, persistent bookmarks
-
-### Frontend ↔ Backend Communication
-
-- **Commands**: Frontend calls Rust via `invoke('command_name', { args })`
-- **Events**: Rust emits events to frontend via `emit('event_name', payload)`
-- See `src-tauri/src/commands/mod.rs` for available commands
-
-### Protocol Implementation Strategy
-
-We're building the Hotline protocol fresh in Rust while referencing the Swift implementation from the main `Hotline` directory. This avoids awkward translation issues and lets us design optimally for Tauri's async event system.
-
-## Reference
-
-- Original Swift app: `../Hotline/`
-- Porting guide: `PORTING-GUIDE.md`
-- Tauri docs: https://tauri.app
-- Zustand docs: https://zustand-demo.pmnd.rs
-
-## License
-
-[Same as parent project]
+- Start with state: recreate Hotline/App/Server state in TypeScript (or Rust-backed store) so views bind to a single source of truth.
+- Protocol first: finish Rust Hotline client (transaction send/await, receive loop, keep-alive) and emit events to the frontend via Tauri.
+- Tracker/Bonjour: wire tracker fetch to persisted bookmarks; add Bonjour (zeroconf) and surface in the same list model.
+- UI sequencing: sidebar tracker/Bonjour → server window shell → chat/DMs/broadcasts → board/news → files/transfers → accounts/settings → about/update polish.
+- UX: keep macOS-like keyboard shortcuts (cmd+R refresh, etc.), alternating rows, badges; include banner panel toggle when implemented.
+- Persistence: store defaults (bookmarks, username/icon, banner flag) locally; mind download paths per OS.
+- Media: map sound effects/icon assets from Swift assets.
+- Testing: add Rust protocol integration tests; unit-test bookmark parsing/tracker fetch; UI smoke tests where practical.
