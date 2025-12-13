@@ -48,46 +48,101 @@ impl AppState {
                 .map_err(|e| format!("Failed to parse bookmarks: {}", e))?
         };
 
-        // Ensure default tracker bookmark exists and fix any that lost their type
-        let default_tracker_address = "hltracker.com";
-        let default_tracker_port = 5498u16;
+        use crate::protocol::constants::{DEFAULT_SERVER_PORT, DEFAULT_TRACKER_PORT};
+        use crate::protocol::types::BookmarkType;
         
         let mut needs_save = false;
         
-        // Fix any existing default tracker that lost its type
+        // Define default trackers
+        let default_trackers = vec![
+            ("default-tracker-hltracker", "Featured Servers", "hltracker.com", DEFAULT_TRACKER_PORT),
+            ("default-tracker-mainecyber", "Maine Cyber", "tracked.mainecyber.com", DEFAULT_TRACKER_PORT),
+            ("default-tracker-preterhuman", "Preterhuman", "tracker.preterhuman.net", DEFAULT_TRACKER_PORT),
+        ];
+        
+        // Define default servers
+        let default_servers = vec![
+            ("default-server-system7", "System7 Today", "hotline.system7today.com", DEFAULT_SERVER_PORT),
+            ("default-server-bobkiwi", "Bob Kiwi's House", "73.132.202.107", DEFAULT_SERVER_PORT),
+            ("default-server-applearchive", "Apple Media Archive & Hotline Navigator", "hotline.semihosted.xyz", DEFAULT_SERVER_PORT),
+        ];
+        
+        // Fix any existing default trackers that lost their type
         for bookmark in bookmarks.iter_mut() {
-            if bookmark.id == "default-tracker-hltracker" 
-                || (bookmark.address == default_tracker_address && bookmark.port == default_tracker_port) {
-                // This is the default tracker - ensure it has the correct type
-                if !matches!(bookmark.bookmark_type, Some(crate::protocol::types::BookmarkType::Tracker)) {
-                    bookmark.bookmark_type = Some(crate::protocol::types::BookmarkType::Tracker);
-                    bookmark.id = "default-tracker-hltracker".to_string(); // Ensure correct ID
-                    bookmark.name = "Featured Servers".to_string(); // Ensure correct name
-                    needs_save = true;
+            for (id, name, address, port) in &default_trackers {
+                if bookmark.id == *id || (bookmark.address == *address && bookmark.port == *port) {
+                    if !matches!(bookmark.bookmark_type, Some(BookmarkType::Tracker)) {
+                        bookmark.bookmark_type = Some(BookmarkType::Tracker);
+                        bookmark.id = id.to_string();
+                        bookmark.name = name.to_string();
+                        needs_save = true;
+                    }
                 }
             }
         }
         
-        let has_default_tracker = bookmarks.iter().any(|b: &Bookmark| {
-            b.address == default_tracker_address 
-            && b.port == default_tracker_port
-            && matches!(b.bookmark_type, Some(crate::protocol::types::BookmarkType::Tracker))
-        });
-
-        if !has_default_tracker {
-            let default_tracker = Bookmark {
-                id: "default-tracker-hltracker".to_string(),
-                name: "Featured Servers".to_string(),
-                address: default_tracker_address.to_string(),
-                port: default_tracker_port,
-                login: "guest".to_string(),
-                password: None,
-                icon: None,
-                auto_connect: false,
-                bookmark_type: Some(crate::protocol::types::BookmarkType::Tracker),
-            };
-            bookmarks.insert(0, default_tracker);
-            needs_save = true;
+        // Fix any existing default servers that lost their type
+        for bookmark in bookmarks.iter_mut() {
+            for (id, name, address, port) in &default_servers {
+                if bookmark.id == *id || (bookmark.address == *address && bookmark.port == *port) {
+                    if !matches!(bookmark.bookmark_type, Some(BookmarkType::Server)) {
+                        bookmark.bookmark_type = Some(BookmarkType::Server);
+                        bookmark.id = id.to_string();
+                        bookmark.name = name.to_string();
+                        needs_save = true;
+                    }
+                }
+            }
+        }
+        
+        // Ensure all default trackers exist
+        for (id, name, address, port) in &default_trackers {
+            let has_tracker = bookmarks.iter().any(|b: &Bookmark| {
+                b.address == *address 
+                && b.port == *port
+                && matches!(b.bookmark_type, Some(BookmarkType::Tracker))
+            });
+            
+            if !has_tracker {
+                let tracker = Bookmark {
+                    id: id.to_string(),
+                    name: name.to_string(),
+                    address: address.to_string(),
+                    port: *port,
+                    login: "guest".to_string(),
+                    password: None,
+                    icon: None,
+                    auto_connect: false,
+                    bookmark_type: Some(BookmarkType::Tracker),
+                };
+                bookmarks.insert(0, tracker);
+                needs_save = true;
+            }
+        }
+        
+        // Ensure all default servers exist
+        for (id, name, address, port) in &default_servers {
+            let has_server = bookmarks.iter().any(|b: &Bookmark| {
+                b.address == *address 
+                && b.port == *port
+                && matches!(b.bookmark_type, Some(BookmarkType::Server))
+            });
+            
+            if !has_server {
+                let server = Bookmark {
+                    id: id.to_string(),
+                    name: name.to_string(),
+                    address: address.to_string(),
+                    port: *port,
+                    login: "guest".to_string(),
+                    password: None,
+                    icon: None,
+                    auto_connect: false,
+                    bookmark_type: Some(BookmarkType::Server),
+                };
+                bookmarks.push(server);
+                needs_save = true;
+            }
         }
         
         // Save if we made any changes

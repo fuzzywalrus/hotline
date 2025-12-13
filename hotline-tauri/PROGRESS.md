@@ -1540,3 +1540,77 @@ Created domain-specific components in proper folders:
 - ✅ Credits information accurate
 
 **Next task:** Other features from development goals
+
+### 2025-12-13: macOS Build Process & Code Signing Setup
+
+**What was completed:**
+- **Release Build Script**: Created automated build script for signed Universal Binary releases
+- **Code Signing Configuration**: Set up Apple Developer credentials and signing identity
+- **Environment Configuration**: Created `.env` file for secure credential storage
+- **macOS Big Sur Support**: Configured minimum system version (11.0) for Universal Binary builds
+- **Build Documentation**: Updated README with comprehensive build instructions
+
+**Build Process Features:**
+- Universal Binary support (Intel x86_64 + Apple Silicon aarch64)
+- Automatic code signing using Developer ID
+- Code signature verification
+- Optional DMG creation (requires `create-dmg`)
+- Optional notarization support (commented out, can be enabled)
+- Clean build artifacts before building
+- Release directory organization
+
+**Configuration Files:**
+- **`.env`**: Contains Apple Developer credentials (gitignored):
+  - `APPLE_ID`: Apple ID email
+  - `APP_PASSWORD`: App-specific password
+  - `TEAM_ID`: Developer team ID
+  - `SIGNING_IDENTITY`: Code signing identity
+- **`build-release.sh`**: Automated build script that:
+  - Loads environment variables from `.env`
+  - Builds Universal Binary via `npm run build:macos-universal`
+  - Verifies code signature
+  - Creates release directory structure
+  - Optionally creates DMG and notarizes
+
+**Tauri Configuration:**
+- Updated `tauri.conf.json` with macOS bundle settings:
+  - `minimumSystemVersion`: "11.0" (macOS Big Sur)
+  - `signingIdentity`: null (uses environment variable)
+  - Removed invalid `info` property (not supported in Tauri v2)
+
+**Build Scripts:**
+- `npm run build:release`: Full release build with signing
+- `npm run build:macos-universal`: Universal Binary build
+- `npm run build:macos-intel`: Intel-only build
+- `npm run build:macos-silicon`: Apple Silicon-only build
+
+**Files created/modified:**
+- `.env` - NEW: Apple Developer credentials (gitignored)
+- `build-release.sh` - NEW: Automated release build script
+- `.gitignore` - UPDATED: Added `.env` and related files
+- `package.json` - UPDATED: Added `build:release` script
+- `src-tauri/tauri.conf.json` - UPDATED: macOS bundle configuration
+- `README.md` - UPDATED: Added build and code signing documentation
+
+**Implementation details:**
+- **Universal Binary**: Builds for both Intel and Apple Silicon in a single binary
+- **Code Signing**: Tauri v2 automatically uses `SIGNING_IDENTITY` environment variable
+- **Minimum macOS Version**: Set to 11.0 (Big Sur) for compatibility
+- **Release Output**: `release/hotline-{version}-macos/` directory
+- **Security**: Credentials stored in `.env` file, never committed to git
+
+**Requirements:**
+- Rust targets: `rustup target add aarch64-apple-darwin x86_64-apple-darwin`
+- `.env` file with Apple Developer credentials
+- Optional: `create-dmg` for DMG creation (`brew install create-dmg`)
+
+**Testing status:**
+- ✅ `.env` file created with credentials
+- ✅ Build script created and executable
+- ✅ Tauri configuration updated
+- ✅ `.gitignore` updated to exclude `.env`
+- ✅ README updated with build instructions
+- ✅ Configuration validated (removed invalid `info` property)
+- ⏸️ Needs testing with actual build to verify code signing works
+
+**Next task:** Test release build process and verify code signing
