@@ -119,8 +119,14 @@ pub async fn reorder_bookmarks(
     bookmarks: Vec<Bookmark>,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    println!("Command: reorder_bookmarks ({} bookmarks)", bookmarks.len());
     state.reorder_bookmarks(bookmarks).await
+}
+
+#[tauri::command]
+pub async fn add_default_bookmarks(
+    state: State<'_, AppState>,
+) -> Result<Vec<Bookmark>, String> {
+    state.add_default_bookmarks().await
 }
 
 #[tauri::command]

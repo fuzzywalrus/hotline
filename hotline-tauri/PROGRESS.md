@@ -34,7 +34,7 @@ This file tracks completed features and implementation notes for the Tauri port.
 - [x] Sound settings tab (add to Settings)
 - [x] About window
 - [x] File preview (images, audio, text files - video excluded to avoid bandwidth issues)
-- [ ] Transfer list window (active/completed transfers)
+- [x] Transfer list window (active/completed transfers)
 
 ### Lower Priority Features
 - [x] Tracker server fetch (COMPLETED)
@@ -44,7 +44,7 @@ This file tracks completed features and implementation notes for the Tauri port.
 - [ ] Server agreement persistence (remember accepted agreements)
 - [x] Keyboard shortcuts
 - [x] Context menus
-- [ ] Notification system
+- [x] Notification system
 
 ---
 
@@ -1265,7 +1265,7 @@ Created domain-specific components in proper folders:
 ### Private Messaging
 - [x] Send private messages to specific users
 - [x] Private message windows/dialogs
-- [ ] Message notifications
+- [x] Message notifications (toast notifications for private messages)
 - [ ] Private chat rooms
 - [ ] Chat invitations
 
@@ -1274,7 +1274,7 @@ Created domain-specific components in proper folders:
 - [x] User privileges/flags display
 - [x] Send private message from user list
 - [ ] Admin functions (kick, ban, disconnect users)
-- [ ] User context menu (right-click actions)
+- [x] User context menu (right-click actions)
 
 ### News & Message Board
 - [x] News/message board reader UI
@@ -1292,8 +1292,8 @@ Created domain-specific components in proper folders:
 ### UI/UX Improvements
 - [x] File preview (images, audio, text files - video excluded to avoid bandwidth issues)
 - [ ] Drag & drop file uploads
-- [ ] Context menus throughout app
-- [ ] Keyboard shortcuts
+- [x] Context menus throughout app
+- [x] Keyboard shortcuts
 - [x] Transfer progress indicators
 - [x] Multiple simultaneous server connections
 - [x] Tabbed interface for multiple servers
@@ -1301,8 +1301,8 @@ Created domain-specific components in proper folders:
 - [x] Connection error handling with inline messages
 - [x] User icon display (classic icons imported)
 - [x] Settings UI for username and icon
-- [ ] Notification system
-- [ ] Sound effects
+- [x] Notification system
+- [x] Sound effects
 
 ### Advanced Features
 - [x] Tracker server support and browsing (COMPLETED)
@@ -1614,3 +1614,89 @@ Created domain-specific components in proper folders:
 - ⏸️ Needs testing with actual build to verify code signing works
 
 **Next task:** Test release build process and verify code signing
+
+### 2025-12-13: Notification System & UI Improvements
+
+**What was completed:**
+- **Notification System**: Comprehensive toast notification system with persistent history log
+- **Server-Specific Notifications**: All notifications include server name for context
+- **Context Menus**: Right-click context menus for users and folders/files
+- **Settings Reorganization**: Moved About and Check for Updates to Settings as tabs
+- **News Date Display**: Added date display to news articles when available
+- **News Layout Fix**: Fixed article viewer pane to be independent of list scroll
+
+**Notification System Features:**
+- **Toast Notifications**: Non-blocking toast notifications with auto-dismiss
+- **Notification Types**: Success, error, info, and warning with distinct styling
+- **Notification History**: Persistent log of all notifications (last 100)
+- **Server Context**: All notifications include server name for clarity
+- **Notification Log**: Accessible from both tracker window and server windows
+- **Integration**: Replaced all `alert()` calls with toast notifications
+
+**Context Menu Features:**
+- **User Context Menu**: Right-click users to access:
+  - Message (opens private message dialog)
+  - Get Info (opens user information dialog)
+- **File/Folder Context Menu**: Right-click files/folders for:
+  - Download (files only)
+  - Get Info
+  - Preview (previewable files only)
+- **Dismissible Menus**: All context menus dismiss on outside click or Escape key
+- **Consistent Design**: Context menus match across all components
+
+**Settings Improvements:**
+- **About Tab**: Moved About window content to Settings as a tab
+- **Updates Tab**: Moved Check for Updates to Settings as a tab
+- **Tab Organization**: Settings now has 6 tabs: General, Icon, Sound, Shortcuts, About, Updates
+- **Cleaner UI**: Removed About and Updates buttons from tracker window header
+
+**News Improvements:**
+- **Date Display**: News articles now show dates when available (from server)
+- **Date Format**: Dates appear after poster name with bullet separator
+- **Layout Fix**: Article viewer pane is now independent of articles list scroll
+  - Fixed height containers prevent scrolling together
+  - Clicking article at bottom of list shows it immediately in viewer
+  - Viewer pane has its own scroll container
+
+**Files created/modified:**
+- `src/stores/notificationStore.ts` - NEW: Notification state management with persistence
+- `src/components/notifications/Toast.tsx` - NEW: Individual toast notification component
+- `src/components/notifications/NotificationContainer.tsx` - NEW: Toast container component
+- `src/components/notifications/NotificationLog.tsx` - NEW: Notification history viewer
+- `src/components/common/ContextMenu.tsx` - UPDATED: Added dismissible functionality, ContextMenuRenderer component
+- `src/components/server/ServerWindow.tsx` - UPDATED: Added notification log button, context menu for users
+- `src/components/server/ServerHeader.tsx` - UPDATED: Added notification log button
+- `src/components/users/UserList.tsx` - UPDATED: Added right-click handler for context menu
+- `src/components/files/FilesTab.tsx` - UPDATED: Updated to use ContextMenuRenderer for dismissible menus
+- `src/components/tracker/BookmarkList.tsx` - UPDATED: Updated to use ContextMenuRenderer for dismissible menus
+- `src/components/server/hooks/useServerHandlers.ts` - UPDATED: Replaced alerts with notifications, added serverName parameter
+- `src/components/server/hooks/useServerEvents.ts` - UPDATED: Added notifications for downloads/uploads/messages, added serverName parameter
+- `src/components/settings/SettingsView.tsx` - UPDATED: Added About and Updates tabs
+- `src/components/settings/AboutSettingsTab.tsx` - NEW: About content as settings tab
+- `src/components/settings/UpdateSettingsTab.tsx` - NEW: Update checking as settings tab
+- `src/components/settings/GeneralSettingsTab.tsx` - UPDATED: Removed About/Updates buttons
+- `src/components/tracker/TrackerWindow.tsx` - UPDATED: Removed About and Updates buttons
+- `src/components/news/NewsTab.tsx` - UPDATED: Added date display, fixed layout for independent scroll
+- `src/App.tsx` - UPDATED: Added NotificationContainer to root
+
+**Implementation details:**
+- **Notification Store**: Zustand store with persistence to localStorage
+  - Stores active notifications and history (last 100)
+  - Auto-removes notifications after duration
+  - Helper functions for common notification types
+- **Server Name Context**: All `showNotification` calls now include serverName parameter
+- **Context Menu System**: Reusable `ContextMenu` component with click-outside and Escape key dismissal
+- **Settings Tabs**: About and Updates are now full tabs instead of buttons
+- **News Layout**: Fixed height containers (`h-full overflow-hidden`) prevent parent scrolling
+
+**Testing status:**
+- ✅ Notification system working with all types
+- ✅ Notification log accessible from tracker and server windows
+- ✅ Server names included in all notifications
+- ✅ Context menus dismissible on outside click and Escape
+- ✅ User and file context menus working correctly
+- ✅ About and Updates accessible from Settings tabs
+- ✅ News dates display when available
+- ✅ News article viewer independent of list scroll
+- ✅ TypeScript compilation successful
+- ⏸️ Needs testing with live server to verify all notification scenarios
