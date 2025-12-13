@@ -28,11 +28,11 @@ if [ -z "$APPLE_ID" ] || [ -z "$APP_PASSWORD" ] || [ -z "$TEAM_ID" ] || [ -z "$S
 fi
 
 VERSION=$(node -p "require('./package.json').version")
-PRODUCT_NAME=$(node -p "require('./package.json').name")
+PRODUCT_NAME=$(node -p "require('./src-tauri/tauri.conf.json').productName")
 RELEASE_DIR="release"
-DIST_DIR="$RELEASE_DIR/hotline-$VERSION-macos"
+DIST_DIR="$RELEASE_DIR/hotline-navigator-$VERSION-macos"
 
-echo "🚀 Building Hotline Tauri Release v$VERSION"
+echo "🚀 Building Hotline Navigator Release v$VERSION"
 echo "================================================"
 echo "📦 Product: $PRODUCT_NAME"
 echo "🍎 Target: macOS Big Sur+ (Universal Binary)"
