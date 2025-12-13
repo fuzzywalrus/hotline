@@ -533,27 +533,38 @@ export default function ServerWindow({ serverId, serverName, onClose }: ServerWi
       setSelectedArticle(null);
       setArticleContent('');
 
-      // Load categories and articles in parallel
-      Promise.all([
-        invoke<NewsCategory[]>('get_news_categories', {
-          serverId,
-          path: newsPath,
-        }).catch((error) => {
-          console.error('Failed to get news categories:', error);
-          return [];
-        }),
-        invoke<NewsArticle[]>('get_news_articles', {
-          serverId,
-          path: newsPath,
-        }).catch((error) => {
-          console.error('Failed to get news articles:', error);
-          return [];
-        })
-      ]).then(([categories, articles]) => {
-        setNewsCategories(categories);
-        setNewsArticles(articles);
-        setLoadingNews(false);
-      });
+      // Load categories OR articles based on path (not both!)
+      // Empty path = root, load categories
+      // Non-empty path = inside a category, load articles
+      const loadNews = async () => {
+        try {
+          if (newsPath.length === 0) {
+            // Root path - load categories only
+            const categories = await invoke<NewsCategory[]>('get_news_categories', {
+              serverId,
+              path: newsPath,
+            });
+            setNewsCategories(categories);
+            setNewsArticles([]);
+          } else {
+            // Inside a category - load articles only
+            const articles = await invoke<NewsArticle[]>('get_news_articles', {
+              serverId,
+              path: newsPath,
+            });
+            setNewsCategories([]);
+            setNewsArticles(articles);
+          }
+        } catch (error) {
+          console.error('Failed to load news:', error);
+          setNewsCategories([]);
+          setNewsArticles([]);
+        } finally {
+          setLoadingNews(false);
+        }
+      };
+
+      loadNews();
     }
   }, [activeTab, newsPath, serverId]);
 

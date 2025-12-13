@@ -593,9 +593,35 @@ impl HotlineClient {
 
                     // If it's not a user/file list reply, forward to pending transaction handlers
                     if !has_user_info && !has_file_info {
-                        let mut pending = pending_transactions.write().await;
-                        if let Some(tx) = pending.remove(&transaction.id) {
-                            let _ = tx.send(transaction).await;
+                        // Remove transaction from pending and get the sender
+                        // Do this quickly to minimize lock time
+                        let tx_opt = {
+                            let mut pending = pending_transactions.write().await;
+                            pending.remove(&transaction.id)
+                        };
+                        
+                        // Send to channel outside the lock to avoid blocking the receive loop
+                        if let Some(tx) = tx_opt {
+                            // Try to send - if receiver is dropped (timeout), this will fail gracefully
+                            // Use try_send to avoid blocking the receive loop
+                            match tx.try_send(transaction) {
+                                Ok(()) => {
+                                    // Successfully sent
+                                }
+                                Err(tokio::sync::mpsc::error::TrySendError::Full(txn)) => {
+                                    // Channel is full - receiver should be waiting, so spawn a task to send
+                                    // This shouldn't normally happen with capacity 1, but handle it gracefully
+                                    tokio::spawn(async move {
+                                        let _ = tx.send(txn).await;
+                                    });
+                                }
+                                Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
+                                    // Receiver was dropped - this is fine (caller timed out and cleaned up)
+                                }
+                            }
+                        } else {
+                            // Transaction not found in pending - might have been cleaned up due to timeout
+                            // This is normal and not an error - just means the caller gave up waiting
                         }
                     }
                 } else {
