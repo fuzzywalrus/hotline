@@ -1255,7 +1255,7 @@ Created domain-specific components in proper folders:
 **Todo (lower priority):**
 - [x] Tracker server fetch (COMPLETED - see above)
 - [ ] Import/export bookmarks (JSON file)
-- [ ] Bookmark reordering (drag & drop)
+- [x] Bookmark reordering (drag & drop) (COMPLETED - see below)
 - [ ] Bonjour/mDNS server discovery
 
 ---
@@ -1614,6 +1614,76 @@ Created domain-specific components in proper folders:
 - ⏸️ Needs testing with actual build to verify code signing works
 
 **Next task:** Test release build process and verify code signing
+
+### 2025-12-13: Bookmark Drag & Drop Reordering
+
+**What was completed:**
+- **Drag & Drop Library**: Integrated `@dnd-kit` library for robust React drag and drop support
+- **Bookmark Reordering**: Full drag and drop reordering for both tracker and server bookmarks
+- **Visual Feedback**: Drag animations and opacity changes during drag operations
+- **Backend Persistence**: Reordered bookmarks automatically saved to disk
+- **Default Bookmarks Management**: Default bookmarks only added on first launch, can be reordered like any bookmark
+- **Re-add Defaults Feature**: Settings button to re-add missing default servers and trackers
+
+**Implementation Details:**
+- **Library Choice**: Switched from native HTML5 drag and drop to `@dnd-kit` for better React integration
+  - `@dnd-kit/core` - Core drag and drop functionality
+  - `@dnd-kit/sortable` - Sortable list support
+  - `@dnd-kit/utilities` - CSS transform utilities
+- **SortableItem Component**: Wrapper component that makes each bookmark draggable
+  - Uses `useSortable` hook from `@dnd-kit/sortable`
+  - Applies transform and transition styles during drag
+  - Sets opacity to 0.5 when dragging
+- **DndContext**: Wraps bookmark list with drag and drop context
+  - Uses `closestCenter` collision detection
+  - Pointer and keyboard sensors for accessibility
+  - `onDragEnd` handler processes reordering
+- **Reordering Logic**:
+  - Finds old and new indices using bookmark IDs
+  - Uses `arrayMove` utility to reorder array
+  - Updates local state immediately for responsive UI
+  - Calls `reorder_bookmarks` Tauri command to persist to disk
+  - Reverts on error to prevent data loss
+- **Default Bookmarks**:
+  - Only added on first launch (when bookmarks file is empty)
+  - After that, defaults are treated as normal bookmarks
+  - Can be deleted, reordered, or edited like any bookmark
+  - "Re-add Default Servers & Trackers" button in Settings → General
+  - Only adds missing defaults (won't create duplicates)
+
+**Files created/modified:**
+- `package.json` - Added `@dnd-kit/core`, `@dnd-kit/sortable`, `@dnd-kit/utilities` dependencies
+- `src/components/tracker/BookmarkList.tsx` - Complete rewrite of drag and drop using `@dnd-kit`
+  - Removed all native HTML5 drag and drop handlers
+  - Added `DndContext`, `SortableContext`, and `SortableItem` components
+  - Simplified event handling (no more preventDefault/stopPropagation issues)
+  - Removed drag handle icons (entire row is draggable with cursor-grab)
+- `src/components/settings/GeneralSettingsTab.tsx` - Added "Re-add Default Servers & Trackers" button
+- `src-tauri/src/state/mod.rs` - Updated `load_bookmarks()` to only add defaults on first launch, added `add_default_bookmarks()` method
+- `src-tauri/src/commands/mod.rs` - Added `add_default_bookmarks` Tauri command
+- `src-tauri/src/lib.rs` - Registered `add_default_bookmarks` command
+
+**Implementation details:**
+- **Drag Sensors**: Pointer sensor for mouse/touch, keyboard sensor for accessibility
+- **Collision Detection**: `closestCenter` strategy for accurate drop target detection
+- **Sorting Strategy**: `verticalListSortingStrategy` for vertical list reordering
+- **Visual Feedback**: 
+  - `cursor-grab` and `active:cursor-grabbing` for drag affordance
+  - Opacity 0.5 during drag
+  - Smooth transitions
+- **Data Integrity**: Backend validates bookmark count and IDs match before saving
+- **Error Handling**: Reverts to original order if backend save fails
+
+**Testing status:**
+- ✅ Drag and drop reordering works for both trackers and servers
+- ✅ Reordered bookmarks persist across app restarts
+- ✅ Default bookmarks can be reordered like any bookmark
+- ✅ "Re-add Defaults" button works correctly
+- ✅ Visual feedback during drag operations
+- ✅ TypeScript compilation successful
+- ✅ No console errors or warnings
+
+**Next task:** Other features from development goals
 
 ### 2025-12-13: Notification System & UI Improvements
 
