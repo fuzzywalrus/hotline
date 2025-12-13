@@ -2,6 +2,7 @@ import { useAppStore } from './stores/appStore';
 import TrackerWindow from './components/tracker/TrackerWindow';
 import ServerWindow from './components/server/ServerWindow';
 import { useDarkMode } from './hooks/useDarkMode';
+import NotificationContainer from './components/notifications/NotificationContainer';
 
 function App() {
   // Initialize dark mode management
@@ -13,6 +14,9 @@ function App() {
 
   return (
     <div className="h-screen w-screen bg-gray-100 dark:bg-gray-900">
+      {/* Notification toasts */}
+      <NotificationContainer />
+      
       {/* Main tracker window */}
       {!focusedServer && <TrackerWindow />}
 

@@ -121,10 +121,18 @@ export function ContextMenuRenderer({ contextMenu, onClose }: { contextMenu: { x
   if (!contextMenu) return null;
 
   return (
-    <ContextMenu
-      items={contextMenu.items}
-      onClose={onClose}
-    />
+    <div
+      className="fixed z-50"
+      style={{
+        left: `${contextMenu.x}px`,
+        top: `${contextMenu.y}px`,
+      }}
+    >
+      <ContextMenu
+        items={contextMenu.items}
+        onClose={onClose}
+      />
+    </div>
   );
 }
 

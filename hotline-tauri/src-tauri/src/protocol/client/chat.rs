@@ -124,20 +124,20 @@ impl HotlineClient {
 
         // Send transaction with combined write+flush
         {
-            let mut write_guard = self.write_half.lock().await;
-            let write_stream = write_guard
-                .as_mut()
-                .ok_or("Not connected".to_string())?;
+        let mut write_guard = self.write_half.lock().await;
+        let write_stream = write_guard
+            .as_mut()
+            .ok_or("Not connected".to_string())?;
 
-            write_stream
-                .write_all(&encoded)
-                .await
-                .map_err(|e| format!("Failed to send agreement: {}", e))?;
+        write_stream
+            .write_all(&encoded)
+            .await
+            .map_err(|e| format!("Failed to send agreement: {}", e))?;
 
-            write_stream
-                .flush()
-                .await
-                .map_err(|e| format!("Failed to flush: {}", e))?;
+        write_stream
+            .flush()
+            .await
+            .map_err(|e| format!("Failed to flush: {}", e))?;
         }
 
         // Wait for reply (but handle empty replies gracefully)

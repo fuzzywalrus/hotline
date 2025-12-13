@@ -36,7 +36,8 @@ export default function MessageDialog({ userId, userName, messages, onSendMessag
       setInput('');
     } catch (error) {
       console.error('Failed to send private message:', error);
-      alert(`Failed to send message: ${error}`);
+      // Error will be handled by useServerHandlers
+      throw error; // Re-throw so parent can handle
     } finally {
       setSending(false);
     }

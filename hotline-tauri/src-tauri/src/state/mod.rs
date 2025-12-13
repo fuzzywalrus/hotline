@@ -89,10 +89,10 @@ impl AppState {
                         bookmark.bookmark_type = Some(BookmarkType::Server);
                         bookmark.id = id.to_string();
                         bookmark.name = name.to_string();
-                        needs_save = true;
-                    }
+                    needs_save = true;
                 }
             }
+        }
         }
         
         // Ensure all default trackers exist
@@ -101,8 +101,8 @@ impl AppState {
                 b.address == *address 
                 && b.port == *port
                 && matches!(b.bookmark_type, Some(BookmarkType::Tracker))
-            });
-            
+        });
+
             if !has_tracker {
                 let tracker = Bookmark {
                     id: id.to_string(),
@@ -134,14 +134,14 @@ impl AppState {
                     name: name.to_string(),
                     address: address.to_string(),
                     port: *port,
-                    login: "guest".to_string(),
-                    password: None,
-                    icon: None,
-                    auto_connect: false,
+                login: "guest".to_string(),
+                password: None,
+                icon: None,
+                auto_connect: false,
                     bookmark_type: Some(BookmarkType::Server),
-                };
+            };
                 bookmarks.push(server);
-                needs_save = true;
+            needs_save = true;
             }
         }
         
