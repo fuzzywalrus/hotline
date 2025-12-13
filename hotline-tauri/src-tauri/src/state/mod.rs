@@ -164,27 +164,25 @@ impl AppState {
 
         client.connect().await?;
 
-        // Emit user access permissions after successful connection
-        let user_access = client.get_user_access().await;
-        let app_handle_clone = self.app_handle.clone();
-        let server_id_for_access = server_id.clone();
-        tokio::spawn(async move {
-            let payload = serde_json::json!({
-                "access": user_access,
-            });
-            let _ = app_handle_clone.emit(&format!("user-access-{}", server_id_for_access), payload);
-        });
-
-        // Get the event receiver from the client
+        // Get the event receiver from the client BEFORE storing it
+        // (once stored, we can't move it)
         let mut event_rx = {
             let mut rx_guard = client.event_rx.lock().await;
             rx_guard.take().ok_or("Event receiver already taken")?
         };
 
+        // Store client in clients map BEFORE starting event loop
+        // This ensures it's available when StatusChanged events fire
+        {
+            let mut clients = self.clients.write().await;
+            clients.insert(server_id.clone(), client);
+        }
+
         // Start event forwarding task
         let app_handle = self.app_handle.clone();
         let server_id_clone = server_id.clone();
         let state_clone = Arc::clone(&self.pending_agreements);
+        let clients_clone = Arc::clone(&self.clients);
         tokio::spawn(async move {
             while let Some(event) = event_rx.recv().await {
                 use crate::protocol::client::HotlineEvent;
@@ -280,14 +278,24 @@ impl AppState {
                             "status": status,
                         });
                         let _ = app_handle.emit(&format!("status-changed-{}", server_id_clone), payload);
+                        
+                        // Emit user access permissions when we're logged in
+                        // This ensures we only emit after login is complete and user_access is set
+                        if matches!(status, crate::protocol::types::ConnectionStatus::LoggedIn) {
+                            // Get user access from the client (non-blocking, already logged in)
+                            if let Some(client) = clients_clone.read().await.get(&server_id_clone) {
+                                let user_access = client.get_user_access().await;
+                                let access_payload = serde_json::json!({
+                                    "access": user_access,
+                                });
+                                let _ = app_handle.emit(&format!("user-access-{}", server_id_clone), access_payload);
+                            }
+                        }
                     }
                 }
             }
             println!("Event forwarding task ended for server {}", server_id_clone);
         });
-
-        let mut clients = self.clients.write().await;
-        clients.insert(server_id.clone(), client);
 
         Ok(server_id)
     }

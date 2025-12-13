@@ -166,6 +166,17 @@ _No features currently in progress._
 
 ## Completed Features (continued)
 
+### 2025-12-11: News Click Deadlock Fix (**Important**)
+
+**What was completed:**
+- Resolved a write lock deadlock in the news client that was triggered when clicking News, which stalled all subsequent transactions (including disconnect).
+- Refactored news send/flush routines to avoid re-entrant locking of `write_half`, keeping the client responsive after news requests.
+
+**Files modified:**
+- `src-tauri/src/protocol/client/news.rs` - Adjusted write/flush handling for all news transactions to prevent blocking the socket.
+
+**Impact:** News can be opened without freezing the client; other commands (file list, disconnect, etc.) continue working after viewing news.
+
 ### 2025-12-11: File Download Implementation
 
 **What was completed:**

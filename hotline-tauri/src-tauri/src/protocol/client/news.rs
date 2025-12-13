@@ -96,37 +96,36 @@ impl HotlineClient {
 
         let encoded = transaction.encode();
 
-        {
+        let write_result = {
             let mut write_guard = self.write_half.lock().await;
             let write_stream = write_guard
                 .as_mut()
                 .ok_or("Not connected".to_string())?;
 
             let write_result = write_stream.write_all(&encoded).await;
-            // write_guard will be dropped when it goes out of scope
             if let Err(e) = &write_result {
                 if e.kind() == ErrorKind::BrokenPipe || e.to_string().contains("Broken pipe") {
-                    let mut write_guard = self.write_half.lock().await;
                     write_guard.take();
                 }
             }
-            write_result.map_err(|e| format!("Failed to post message: {}", e))?;
+            write_result
+        };
+        write_result.map_err(|e| format!("Failed to post message: {}", e))?;
 
-            let flush_result = {
-                let mut write_guard = self.write_half.lock().await;
-                let write_stream = write_guard
-                    .as_mut()
-                    .ok_or("Not connected".to_string())?;
-                write_stream.flush().await
-            };
+        let flush_result = {
+            let mut write_guard = self.write_half.lock().await;
+            let write_stream = write_guard
+                .as_mut()
+                .ok_or("Not connected".to_string())?;
+            let flush_result = write_stream.flush().await;
             if let Err(e) = &flush_result {
                 if e.kind() == ErrorKind::BrokenPipe || e.to_string().contains("Broken pipe") {
-                    let mut write_guard = self.write_half.lock().await;
                     write_guard.take();
                 }
             }
-            flush_result.map_err(|e| format!("Failed to flush: {}", e))?;
-        }
+            flush_result
+        };
+        flush_result.map_err(|e| format!("Failed to flush: {}", e))?;
 
         println!("Message board post sent successfully");
 
@@ -153,53 +152,81 @@ impl HotlineClient {
         // Send transaction
         let encoded = transaction.encode();
 
-        {
+        let write_result = {
             let mut write_guard = self.write_half.lock().await;
             let write_stream = write_guard
                 .as_mut()
                 .ok_or("Not connected".to_string())?;
 
             let write_result = write_stream.write_all(&encoded).await;
-            // write_guard will be dropped when it goes out of scope
             if let Err(e) = &write_result {
                 if e.kind() == ErrorKind::BrokenPipe || e.to_string().contains("Broken pipe") {
-                    let mut write_guard = self.write_half.lock().await;
                     write_guard.take();
                 }
             }
-            write_result.map_err(|e| format!("Failed to send request: {}", e))?;
-
-            let flush_result = {
-                let mut write_guard = self.write_half.lock().await;
-                let write_stream = write_guard
-                    .as_mut()
-                    .ok_or("Not connected".to_string())?;
-                write_stream.flush().await
-            };
-            if let Err(e) = &flush_result {
-                if e.kind() == ErrorKind::BrokenPipe || e.to_string().contains("Broken pipe") {
-                    let mut write_guard = self.write_half.lock().await;
-                    write_guard.take();
-                }
-            }
-            flush_result.map_err(|e| format!("Failed to flush: {}", e))?;
+            write_result
+        };
+        if let Err(e) = write_result {
+            // Clean up pending transaction on send error
+            let mut pending = self.pending_transactions.write().await;
+            pending.remove(&transaction_id);
+            return Err(format!("Failed to send request: {}", e));
         }
 
-        // Wait for reply
-        let reply = tokio::time::timeout(Duration::from_secs(10), rx.recv())
-            .await
-            .map_err(|_| "Timeout waiting for news categories reply".to_string())?
-            .ok_or("Channel closed".to_string())?;
+        let flush_result = {
+            let mut write_guard = self.write_half.lock().await;
+            let write_stream = write_guard
+                .as_mut()
+                .ok_or("Not connected".to_string())?;
+            let flush_result = write_stream.flush().await;
+            if let Err(e) = &flush_result {
+                if e.kind() == ErrorKind::BrokenPipe || e.to_string().contains("Broken pipe") {
+                    write_guard.take();
+                }
+            }
+            flush_result
+        };
+        if let Err(e) = flush_result {
+            // Clean up pending transaction on flush error
+            let mut pending = self.pending_transactions.write().await;
+            pending.remove(&transaction_id);
+            return Err(format!("Failed to flush: {}", e));
+        }
 
+        // Wait for reply (shorter timeout for unsupported feature)
+        let reply = match tokio::time::timeout(Duration::from_secs(5), rx.recv()).await {
+            Ok(Some(reply)) => reply,
+            Ok(None) => {
+                // Channel closed - clean up pending transaction
+                let mut pending = self.pending_transactions.write().await;
+                pending.remove(&transaction_id);
+                return Err("Channel closed while waiting for news categories reply".to_string());
+            }
+            Err(_) => {
+                // Timeout - clean up pending transaction
+                let mut pending = self.pending_transactions.write().await;
+                pending.remove(&transaction_id);
+                return Err("Timeout waiting for news categories reply (server may not support news)".to_string());
+            }
+        };
+
+        // Note: Transaction was already removed from pending by receive loop
+        // Empty reply (0 fields, error_code=0) is valid - means "no news"
+        
         if reply.error_code != 0 {
             let error_msg = reply
                 .get_field(FieldType::ErrorText)
                 .and_then(|f| f.to_string().ok())
                 .unwrap_or_else(|| format!("Error code: {}", reply.error_code));
+            // Return a more user-friendly error for unsupported features
+            if reply.error_code == 1 || error_msg.to_lowercase().contains("not supported") {
+                return Err("News is not supported on this server".to_string());
+            }
             return Err(format!("Get news categories failed: {}", error_msg));
         }
 
         // Parse categories from NewsCategoryListData15 fields
+        // Empty reply (0 fields) is valid - just means no categories
         let mut categories = Vec::new();
         for field in &reply.fields {
             if field.field_type == FieldType::NewsCategoryListData15 {
@@ -209,7 +236,7 @@ impl HotlineClient {
             }
         }
 
-        println!("Received {} news categories", categories.len());
+        println!("Received {} news categories (reply had {} fields)", categories.len(), reply.fields.len());
 
         Ok(categories)
     }
@@ -234,60 +261,88 @@ impl HotlineClient {
         // Send transaction
         let encoded = transaction.encode();
 
-        {
+        let write_result = {
             let mut write_guard = self.write_half.lock().await;
             let write_stream = write_guard
                 .as_mut()
                 .ok_or("Not connected".to_string())?;
 
             let write_result = write_stream.write_all(&encoded).await;
-            // write_guard will be dropped when it goes out of scope
             if let Err(e) = &write_result {
                 if e.kind() == ErrorKind::BrokenPipe || e.to_string().contains("Broken pipe") {
-                    let mut write_guard = self.write_half.lock().await;
                     write_guard.take();
                 }
             }
-            write_result.map_err(|e| format!("Failed to send request: {}", e))?;
-
-            let flush_result = {
-                let mut write_guard = self.write_half.lock().await;
-                let write_stream = write_guard
-                    .as_mut()
-                    .ok_or("Not connected".to_string())?;
-                write_stream.flush().await
-            };
-            if let Err(e) = &flush_result {
-                if e.kind() == ErrorKind::BrokenPipe || e.to_string().contains("Broken pipe") {
-                    let mut write_guard = self.write_half.lock().await;
-                    write_guard.take();
-                }
-            }
-            flush_result.map_err(|e| format!("Failed to flush: {}", e))?;
+            write_result
+        };
+        if let Err(e) = write_result {
+            // Clean up pending transaction on send error
+            let mut pending = self.pending_transactions.write().await;
+            pending.remove(&transaction_id);
+            return Err(format!("Failed to send request: {}", e));
         }
 
-        // Wait for reply
-        let reply = tokio::time::timeout(Duration::from_secs(10), rx.recv())
-            .await
-            .map_err(|_| "Timeout waiting for news articles reply".to_string())?
-            .ok_or("Channel closed".to_string())?;
+        let flush_result = {
+            let mut write_guard = self.write_half.lock().await;
+            let write_stream = write_guard
+                .as_mut()
+                .ok_or("Not connected".to_string())?;
+            let flush_result = write_stream.flush().await;
+            if let Err(e) = &flush_result {
+                if e.kind() == ErrorKind::BrokenPipe || e.to_string().contains("Broken pipe") {
+                    write_guard.take();
+                }
+            }
+            flush_result
+        };
+        if let Err(e) = flush_result {
+            // Clean up pending transaction on flush error
+            let mut pending = self.pending_transactions.write().await;
+            pending.remove(&transaction_id);
+            return Err(format!("Failed to flush: {}", e));
+        }
 
+        // Wait for reply (shorter timeout for unsupported feature)
+        let reply = match tokio::time::timeout(Duration::from_secs(5), rx.recv()).await {
+            Ok(Some(reply)) => reply,
+            Ok(None) => {
+                // Channel closed - clean up pending transaction
+                let mut pending = self.pending_transactions.write().await;
+                pending.remove(&transaction_id);
+                return Err("Channel closed while waiting for news articles reply".to_string());
+            }
+            Err(_) => {
+                // Timeout - clean up pending transaction
+                let mut pending = self.pending_transactions.write().await;
+                pending.remove(&transaction_id);
+                return Err("Timeout waiting for news articles reply (server may not support news)".to_string());
+            }
+        };
+
+        // Note: Transaction was already removed from pending by receive loop
+        // Empty reply (0 fields, error_code=0) is valid - means "no news"
+        
         if reply.error_code != 0 {
             let error_msg = reply
                 .get_field(FieldType::ErrorText)
                 .and_then(|f| f.to_string().ok())
                 .unwrap_or_else(|| format!("Error code: {}", reply.error_code));
+            // Return a more user-friendly error for unsupported features
+            if reply.error_code == 1 || error_msg.to_lowercase().contains("not supported") {
+                return Err("News is not supported on this server".to_string());
+            }
             return Err(format!("Get news articles failed: {}", error_msg));
         }
 
         // Parse articles from NewsArticleListData field
+        // Empty reply (0 fields) is valid - just means no articles
         let articles = if let Some(field) = reply.get_field(FieldType::NewsArticleListData) {
             self.parse_news_article_list(&field.data, &path)?
         } else {
             Vec::new()
         };
 
-        println!("Received {} news articles", articles.len());
+        println!("Received {} news articles (reply had {} fields)", articles.len(), reply.fields.len());
 
         Ok(articles)
     }
@@ -312,44 +367,66 @@ impl HotlineClient {
         // Send transaction
         let encoded = transaction.encode();
 
-        {
+        let write_result = {
             let mut write_guard = self.write_half.lock().await;
             let write_stream = write_guard
                 .as_mut()
                 .ok_or("Not connected".to_string())?;
 
             let write_result = write_stream.write_all(&encoded).await;
-            // write_guard will be dropped when it goes out of scope
             if let Err(e) = &write_result {
                 if e.kind() == ErrorKind::BrokenPipe || e.to_string().contains("Broken pipe") {
-                    let mut write_guard = self.write_half.lock().await;
                     write_guard.take();
                 }
             }
-            write_result.map_err(|e| format!("Failed to send request: {}", e))?;
+            write_result
+        };
+        if let Err(e) = write_result {
+            // Clean up pending transaction on send error
+            let mut pending = self.pending_transactions.write().await;
+            pending.remove(&transaction_id);
+            return Err(format!("Failed to send request: {}", e));
+        }
 
-            let flush_result = {
-                let mut write_guard = self.write_half.lock().await;
-                let write_stream = write_guard
-                    .as_mut()
-                    .ok_or("Not connected".to_string())?;
-                write_stream.flush().await
-            };
+        let flush_result = {
+            let mut write_guard = self.write_half.lock().await;
+            let write_stream = write_guard
+                .as_mut()
+                .ok_or("Not connected".to_string())?;
+            let flush_result = write_stream.flush().await;
             if let Err(e) = &flush_result {
                 if e.kind() == ErrorKind::BrokenPipe || e.to_string().contains("Broken pipe") {
-                    let mut write_guard = self.write_half.lock().await;
                     write_guard.take();
                 }
             }
-            flush_result.map_err(|e| format!("Failed to flush: {}", e))?;
+            flush_result
+        };
+        if let Err(e) = flush_result {
+            // Clean up pending transaction on flush error
+            let mut pending = self.pending_transactions.write().await;
+            pending.remove(&transaction_id);
+            return Err(format!("Failed to flush: {}", e));
         }
 
         // Wait for reply
-        let reply = tokio::time::timeout(Duration::from_secs(10), rx.recv())
-            .await
-            .map_err(|_| "Timeout waiting for news article data reply".to_string())?
-            .ok_or("Channel closed".to_string())?;
+        let reply = match tokio::time::timeout(Duration::from_secs(10), rx.recv()).await {
+            Ok(Some(reply)) => reply,
+            Ok(None) => {
+                // Channel closed - clean up pending transaction
+                let mut pending = self.pending_transactions.write().await;
+                pending.remove(&transaction_id);
+                return Err("Channel closed while waiting for news article data reply".to_string());
+            }
+            Err(_) => {
+                // Timeout - clean up pending transaction
+                let mut pending = self.pending_transactions.write().await;
+                pending.remove(&transaction_id);
+                return Err("Timeout waiting for news article data reply".to_string());
+            }
+        };
 
+        // Note: Transaction was already removed from pending by receive loop
+        
         if reply.error_code != 0 {
             let error_msg = reply
                 .get_field(FieldType::ErrorText)
@@ -392,44 +469,66 @@ impl HotlineClient {
         // Send transaction
         let encoded = transaction.encode();
 
-        {
+        let write_result = {
             let mut write_guard = self.write_half.lock().await;
             let write_stream = write_guard
                 .as_mut()
                 .ok_or("Not connected".to_string())?;
 
             let write_result = write_stream.write_all(&encoded).await;
-            // write_guard will be dropped when it goes out of scope
             if let Err(e) = &write_result {
                 if e.kind() == ErrorKind::BrokenPipe || e.to_string().contains("Broken pipe") {
-                    let mut write_guard = self.write_half.lock().await;
                     write_guard.take();
                 }
             }
-            write_result.map_err(|e| format!("Failed to send request: {}", e))?;
+            write_result
+        };
+        if let Err(e) = write_result {
+            // Clean up pending transaction on send error
+            let mut pending = self.pending_transactions.write().await;
+            pending.remove(&transaction_id);
+            return Err(format!("Failed to send request: {}", e));
+        }
 
-            let flush_result = {
-                let mut write_guard = self.write_half.lock().await;
-                let write_stream = write_guard
-                    .as_mut()
-                    .ok_or("Not connected".to_string())?;
-                write_stream.flush().await
-            };
+        let flush_result = {
+            let mut write_guard = self.write_half.lock().await;
+            let write_stream = write_guard
+                .as_mut()
+                .ok_or("Not connected".to_string())?;
+            let flush_result = write_stream.flush().await;
             if let Err(e) = &flush_result {
                 if e.kind() == ErrorKind::BrokenPipe || e.to_string().contains("Broken pipe") {
-                    let mut write_guard = self.write_half.lock().await;
                     write_guard.take();
                 }
             }
-            flush_result.map_err(|e| format!("Failed to flush: {}", e))?;
+            flush_result
+        };
+        if let Err(e) = flush_result {
+            // Clean up pending transaction on flush error
+            let mut pending = self.pending_transactions.write().await;
+            pending.remove(&transaction_id);
+            return Err(format!("Failed to flush: {}", e));
         }
 
         // Wait for reply
-        let reply = tokio::time::timeout(Duration::from_secs(10), rx.recv())
-            .await
-            .map_err(|_| "Timeout waiting for post news article reply".to_string())?
-            .ok_or("Channel closed".to_string())?;
+        let reply = match tokio::time::timeout(Duration::from_secs(10), rx.recv()).await {
+            Ok(Some(reply)) => reply,
+            Ok(None) => {
+                // Channel closed - clean up pending transaction
+                let mut pending = self.pending_transactions.write().await;
+                pending.remove(&transaction_id);
+                return Err("Channel closed while waiting for post news article reply".to_string());
+            }
+            Err(_) => {
+                // Timeout - clean up pending transaction
+                let mut pending = self.pending_transactions.write().await;
+                pending.remove(&transaction_id);
+                return Err("Timeout waiting for post news article reply".to_string());
+            }
+        };
 
+        // Note: Transaction was already removed from pending by receive loop
+        
         if reply.error_code != 0 {
             let error_msg = reply
                 .get_field(FieldType::ErrorText)

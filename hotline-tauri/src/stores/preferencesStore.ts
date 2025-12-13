@@ -45,7 +45,7 @@ export const usePreferencesStore = create<PreferencesState>()(
     (set) => ({
       username: 'guest',
       userIconId: 191, // Default icon from Swift code
-      fileCacheDepth: 8, // Default to 8 layers deep
+      fileCacheDepth: 2, // Default to 2 layers deep
       enablePrivateMessaging: true, // Private messaging enabled by default
       darkMode: 'system', // Default to system preference
       

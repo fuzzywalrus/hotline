@@ -130,6 +130,11 @@ export default function NewsTab({
             <div className="text-sm text-gray-500 dark:text-gray-400 text-center py-8">
               Loading news...
             </div>
+          ) : newsCategories.length === 0 && newsArticles.length === 0 ? (
+            <div className="text-sm text-gray-500 dark:text-gray-400 text-center py-8 px-4">
+              <p className="mb-2">No news available</p>
+              <p className="text-xs">This server may not support news, or there are no news articles.</p>
+            </div>
           ) : newsArticles.length === 0 ? (
             <div className="text-sm text-gray-500 dark:text-gray-400 text-center py-8">
               No articles in this category
