@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, Fragment } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useAppStore } from '../../stores/appStore';
 import { usePreferencesStore } from '../../stores/preferencesStore';
@@ -244,45 +244,70 @@ export default function BookmarkList({ bookmarks, searchQuery = '' }: BookmarkLi
 
   // Handle drag and drop reordering
   const handleDragStart = (e: React.DragEvent, bookmarkId: string) => {
-    setDraggedBookmarkId(bookmarkId);
+    console.log('=== handleDragStart ===', bookmarkId);
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', bookmarkId);
+    setDraggedBookmarkId(bookmarkId);
+
+    // Make the dragged element semi-transparent
+    if (e.currentTarget instanceof HTMLElement) {
+      e.currentTarget.style.opacity = '0.4';
+    }
   };
 
-  const handleDragOver = (e: React.DragEvent, filteredIndex: number) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    setDragOverIndex(filteredIndex);
-  };
 
-  const handleDragLeave = () => {
-    setDragOverIndex(null);
-  };
 
   const handleDrop = async (e: React.DragEvent, dropBookmarkId: string) => {
     e.preventDefault();
+    e.stopPropagation();
+    
+    console.log('=== handleDrop called ===', { draggedBookmarkId, dropBookmarkId });
+    
     setDragOverIndex(null);
     
-    if (!draggedBookmarkId) return;
-
-    // Find the dragged bookmark and its current index in the original (unfiltered) list
-    const draggedIndex = bookmarks.findIndex(b => b.id === draggedBookmarkId);
-    if (draggedIndex === -1) return;
-
-    // Find the drop target bookmark's index in the original list
-    const dropIndex = bookmarks.findIndex(b => b.id === dropBookmarkId);
-    if (dropIndex === -1) return;
-
-    // Don't do anything if dropped on itself
-    if (draggedIndex === dropIndex) {
+    // Try to get the dragged bookmark ID from dataTransfer as fallback
+    const draggedIdFromData = e.dataTransfer.getData('text/plain') || e.dataTransfer.getData('application/x-bookmark-id');
+    const actualDraggedId = draggedBookmarkId || draggedIdFromData;
+    
+    console.log('Dragged ID from state:', draggedBookmarkId, 'from dataTransfer:', draggedIdFromData, 'using:', actualDraggedId);
+    
+    if (!actualDraggedId) {
+      console.log('No dragged bookmark ID found');
       setDraggedBookmarkId(null);
       return;
     }
+
+    // Find the dragged bookmark and its current index in the original (unfiltered) list
+    const draggedIndex = bookmarks.findIndex(b => b.id === actualDraggedId);
+    if (draggedIndex === -1) {
+      console.log('Dragged bookmark not found:', actualDraggedId, 'available IDs:', bookmarks.map(b => b.id));
+      setDraggedBookmarkId(null);
+      return;
+    }
+
+    // Find the drop target bookmark's index in the original list
+    const dropIndex = bookmarks.findIndex(b => b.id === dropBookmarkId);
+    if (dropIndex === -1) {
+      console.log('Drop target bookmark not found:', dropBookmarkId, 'available IDs:', bookmarks.map(b => b.id));
+      setDraggedBookmarkId(null);
+      return;
+    }
+
+    // Don't do anything if dropped on itself
+    if (draggedIndex === dropIndex) {
+      console.log('Dropped on itself');
+      setDraggedBookmarkId(null);
+      return;
+    }
+
+    console.log('Reordering from index', draggedIndex, 'to index', dropIndex);
 
     // Reorder bookmarks
     const newBookmarks = [...bookmarks];
     const [draggedBookmark] = newBookmarks.splice(draggedIndex, 1);
     newBookmarks.splice(dropIndex, 0, draggedBookmark);
+
+    console.log('New order:', newBookmarks.map(b => b.name));
 
     // Update local state immediately for responsive UI
     setBookmarks(newBookmarks);
@@ -290,6 +315,7 @@ export default function BookmarkList({ bookmarks, searchQuery = '' }: BookmarkLi
     // Save to backend
     try {
       await invoke('reorder_bookmarks', { bookmarks: newBookmarks });
+      console.log('Successfully reordered bookmarks');
     } catch (error) {
       console.error('Failed to reorder bookmarks:', error);
       // Revert on error
@@ -300,13 +326,83 @@ export default function BookmarkList({ bookmarks, searchQuery = '' }: BookmarkLi
   };
 
   const handleDragEnd = () => {
+    console.log('=== handleDragEnd ===', draggedBookmarkId);
     setDraggedBookmarkId(null);
     setDragOverIndex(null);
   };
 
+  // Debug: Listen for all drop events on the document
+  useEffect(() => {
+    const handleGlobalDrop = (e: DragEvent) => {
+      console.log('=== GLOBAL DROP EVENT ===', {
+        target: e.target,
+        currentTarget: e.currentTarget,
+        dataTransfer: e.dataTransfer?.getData('text/plain'),
+      });
+    };
+    
+    const handleGlobalDragOver = (e: DragEvent) => {
+      if (draggedBookmarkId) {
+        console.log('=== GLOBAL DRAG OVER ===', {
+          target: e.target,
+          draggedBookmarkId,
+        });
+      }
+    };
+
+    document.addEventListener('drop', handleGlobalDrop);
+    document.addEventListener('dragover', handleGlobalDragOver);
+    
+    return () => {
+      document.removeEventListener('drop', handleGlobalDrop);
+      document.removeEventListener('dragover', handleGlobalDragOver);
+    };
+  }, [draggedBookmarkId]);
+
   return (
     <>
-      <div className="bg-white dark:bg-gray-900">
+      <div 
+        className="bg-white dark:bg-gray-900"
+        onDragOver={(e) => {
+          // CRITICAL: Always preventDefault to allow drop events
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          if (draggedBookmarkId) {
+            const target = e.target as HTMLElement;
+            const draggableElement = target.closest('[draggable="true"]') as HTMLElement;
+            if (draggableElement) {
+              const bookmarkId = draggableElement.getAttribute('data-bookmark-id');
+              console.log('🔥 Container dragOver - over element:', bookmarkId || 'unknown', 'target:', target.tagName, target.className);
+            }
+          }
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          console.log('🔥🔥🔥 Container onDrop FIRED - target:', (e.target as HTMLElement).tagName);
+          // Find which bookmark element was dropped on
+          const target = e.target as HTMLElement;
+          const draggableElement = target.closest('[draggable="true"]') as HTMLElement;
+          
+          console.log('Container drop - draggableElement:', draggableElement, 'draggedBookmarkId:', draggedBookmarkId);
+          
+          if (draggableElement && draggedBookmarkId) {
+            const dropBookmarkId = draggableElement.getAttribute('data-bookmark-id');
+            console.log('Container drop - dropBookmarkId:', dropBookmarkId);
+            if (dropBookmarkId && dropBookmarkId !== draggedBookmarkId) {
+              console.log('🔥🔥🔥 Container onDrop - calling handleDrop with:', dropBookmarkId);
+              handleDrop(e as any, dropBookmarkId);
+            } else {
+              console.log('Container drop - same bookmark or invalid');
+              setDraggedBookmarkId(null);
+              setDragOverIndex(null);
+            }
+          } else {
+            console.log('Container drop - no valid drop target');
+            setDraggedBookmarkId(null);
+            setDragOverIndex(null);
+          }
+        }}
+      >
         {filteredBookmarks.map((bookmark, index) => {
           const isTracker = bookmark.type === 'tracker';
           const isExpanded = expandedTrackers.has(bookmark.id);
@@ -319,27 +415,34 @@ export default function BookmarkList({ bookmarks, searchQuery = '' }: BookmarkLi
           // Only their nested servers are filtered
           
           return (
-            <div key={bookmark.id}>
-              {isTracker ? (
-                // Tracker display - compact, list-like
-                <>
-                  <div
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, bookmark.id)}
-                    onDragOver={(e) => handleDragOver(e, index)}
-                    onDragLeave={handleDragLeave}
-                    onDrop={(e) => handleDrop(e, bookmark.id)}
-                    onDragEnd={handleDragEnd}
-                    className={`h-[34px] px-2 flex items-center gap-1.5 cursor-move group ${
-                      isEven 
-                        ? 'bg-white dark:bg-gray-900' 
-                        : 'bg-gray-50 dark:bg-gray-800/50'
-                    } hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors ${
-                      draggedBookmarkId === bookmark.id ? 'opacity-50' : ''
-                    } ${
-                      dragOverIndex === index ? 'border-t-2 border-blue-500' : ''
-                    }`}
-                    onClick={() => handleToggleTracker(bookmark.id)}
+            isTracker ? (
+              // Tracker display - compact, list-like
+              <Fragment key={bookmark.id}>
+                <div
+                  data-bookmark-id={bookmark.id}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    const bookmarkAtIndex = filteredBookmarks[index];
+                    if (draggedBookmarkId && bookmarkAtIndex && draggedBookmarkId !== bookmarkAtIndex.id) {
+                      setDragOverIndex(index);
+                    }
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    console.log('🎯 DROP EVENT FIRED on tracker:', bookmark.id);
+                    handleDrop(e, bookmark.id);
+                  }}
+                  onClick={() => handleToggleTracker(bookmark.id)}
+                  className={`h-[34px] px-2 flex items-center gap-1.5 cursor-pointer group ${
+                    isEven
+                      ? 'bg-white dark:bg-gray-900'
+                      : 'bg-gray-50 dark:bg-gray-800/50'
+                  } hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors ${
+                    draggedBookmarkId === bookmark.id ? 'opacity-50' : ''
+                  } ${
+                    dragOverIndex === index ? 'border-t-2 border-blue-500' : ''
+                  }`}
                     onContextMenu={(e) => {
                       const items: ContextMenuItem[] = [
                         {
@@ -374,7 +477,13 @@ export default function BookmarkList({ bookmarks, searchQuery = '' }: BookmarkLi
                     }}
                   >
                     {/* Drag handle - 6px width */}
-                    <div className="flex-shrink-0 w-[6px] flex items-center justify-center text-gray-300 dark:text-gray-600 cursor-move opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div
+                      draggable={true}
+                      onDragStart={(e) => handleDragStart(e, bookmark.id)}
+                      onDragEnd={handleDragEnd}
+                      onClick={(e) => e.stopPropagation()}
+                      className="flex-shrink-0 w-[6px] flex items-center justify-center text-gray-300 dark:text-gray-600 cursor-move opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
                       <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 16 16">
                         <path d="M2 4h2v2H2V4zm0 3h2v2H2V7zm0 3h2v2H2v-2zm3-6h2v2H5V4zm0 3h2v2H5V7zm0 3h2v2H5v-2zm3-6h2v2H8V4zm0 3h2v2H8V7zm0 3h2v2H8v-2z"/>
                       </svg>
@@ -452,7 +561,14 @@ export default function BookmarkList({ bookmarks, searchQuery = '' }: BookmarkLi
                     </button>
                     
                     {/* Edit/Delete buttons on hover */}
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity mr-1">
+                    <div 
+                      className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity mr-1"
+                      onDragOver={(e) => {
+                        // CRITICAL: preventDefault() to allow drop
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = 'move';
+                      }}
+                    >
                 <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -554,17 +670,61 @@ export default function BookmarkList({ bookmarks, searchQuery = '' }: BookmarkLi
                       <span className="text-xs text-gray-500 dark:text-gray-400">No servers found</span>
                     </div>
                   )}
-                </>
-              ) : (
-                // Regular server bookmark - compact list style
+                </Fragment>
+            ) : (
+              // Regular server bookmark - compact list style
+              <Fragment key={bookmark.id}>
                 <div
-                  draggable
-                  onDragStart={(e) => handleDragStart(e, bookmark.id)}
-                  onDragOver={(e) => handleDragOver(e, index)}
-                  onDragLeave={handleDragLeave}
-                  onDrop={(e) => handleDrop(e, bookmark.id)}
-                  onDragEnd={handleDragEnd}
-                  className={`h-[34px] px-2 flex items-center gap-1.5 group cursor-move ${
+                  data-bookmark-id={bookmark.id}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    const bookmarkAtIndex = filteredBookmarks[index];
+                    if (draggedBookmarkId && bookmarkAtIndex && draggedBookmarkId !== bookmarkAtIndex.id) {
+                      setDragOverIndex(index);
+                    }
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    console.log('🎯 DROP EVENT FIRED on server:', bookmark.id);
+                    handleDrop(e, bookmark.id);
+                  }}
+                  onClick={() => handleConnect(bookmark)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const items: ContextMenuItem[] = [
+                      {
+                        label: 'Copy Link',
+                        icon: '🔗',
+                        action: () => {
+                          const link = `hotline://${bookmark.address}:${bookmark.port}`;
+                          navigator.clipboard.writeText(link);
+                        },
+                      },
+                      {
+                        label: 'Copy Address',
+                        icon: '📋',
+                        action: () => {
+                          navigator.clipboard.writeText(`${bookmark.address}:${bookmark.port}`);
+                        },
+                      },
+                      { divider: true, label: '', action: () => {} },
+                      {
+                        label: 'Edit Bookmark...',
+                        icon: '✏️',
+                        action: () => setEditingBookmark(bookmark),
+                      },
+                      { divider: true, label: '', action: () => {} },
+                      {
+                        label: 'Delete Bookmark',
+                        icon: '🗑️',
+                        action: () => setDeletingId(bookmark.id),
+                      },
+                    ];
+                    showContextMenu(e, items);
+                  }}
+                  className={`h-[34px] px-2 flex items-center gap-1.5 group cursor-pointer ${
                     isEven 
                       ? 'bg-white dark:bg-gray-900' 
                       : 'bg-gray-50 dark:bg-gray-800/50'
@@ -575,7 +735,13 @@ export default function BookmarkList({ bookmarks, searchQuery = '' }: BookmarkLi
                   }`}
                 >
                   {/* Drag handle - 6px width */}
-                  <div className="flex-shrink-0 w-[6px] flex items-center justify-center text-gray-300 dark:text-gray-600 cursor-move opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div
+                    draggable={true}
+                    onDragStart={(e) => handleDragStart(e, bookmark.id)}
+                    onDragEnd={handleDragEnd}
+                    onClick={(e) => e.stopPropagation()}
+                    className="flex-shrink-0 w-[6px] flex items-center justify-center text-gray-300 dark:text-gray-600 cursor-move opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
                     <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 16 16">
                       <path d="M2 4h2v2H2V4zm0 3h2v2H2V7zm0 3h2v2H2v-2zm3-6h2v2H5V4zm0 3h2v2H5V7zm0 3h2v2H5v-2zm3-6h2v2H8V4zm0 3h2v2H8V7zm0 3h2v2H8v-2z"/>
                     </svg>
@@ -614,23 +780,39 @@ export default function BookmarkList({ bookmarks, searchQuery = '' }: BookmarkLi
                   </span>
                   
                   {/* Edit/Delete/Connect buttons on hover */}
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div 
+                    className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                    onDragOver={(e) => {
+                      // CRITICAL: preventDefault() to allow drop
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = 'move';
+                    }}
+                  >
                 <button
-                  onClick={() => setEditingBookmark(bookmark)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setEditingBookmark(bookmark);
+                  }}
                       className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 text-xs px-1.5 py-0.5 rounded hover:bg-blue-100 dark:hover:bg-blue-900/30"
                       title="Edit bookmark"
                 >
                   Edit
                 </button>
                 <button
-                  onClick={() => setDeletingId(bookmark.id)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDeletingId(bookmark.id);
+                  }}
                       className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 text-xs px-1.5 py-0.5 rounded hover:bg-red-100 dark:hover:bg-red-900/30"
                       title="Delete bookmark"
                 >
                   Delete
                 </button>
                 <button
-                  onClick={() => handleConnect(bookmark)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleConnect(bookmark);
+                  }}
                   disabled={connectingId === bookmark.id}
                       className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 text-xs px-2 py-0.5 rounded bg-blue-50 dark:bg-blue-900/30 disabled:opacity-50 disabled:cursor-not-allowed"
                       title="Connect to server"
@@ -638,35 +820,35 @@ export default function BookmarkList({ bookmarks, searchQuery = '' }: BookmarkLi
                   {connectingId === bookmark.id ? 'Connecting...' : 'Connect'}
                 </button>
               </div>
-            </div>
-              )}
-              
-              {/* Connection error message for servers */}
-              {!isTracker && connectionErrors.has(bookmark.id) && (
-                <div className={`px-2 py-1.5 bg-red-50 dark:bg-red-900/20 border-l-2 border-red-500 flex items-center justify-between gap-2 ${
-                  isEven 
-                    ? 'bg-red-50 dark:bg-red-900/20' 
-                    : 'bg-red-100 dark:bg-red-900/30'
-                }`}>
-                  <p className="text-xs text-red-800 dark:text-red-200 font-medium flex-1">
-                    {connectionErrors.get(bookmark.id)}
-                  </p>
-                  <button
-                    onClick={() => {
-                      setConnectionErrors((prev) => {
-                        const next = new Map(prev);
-                        next.delete(bookmark.id);
-                        return next;
-                      });
-                    }}
-                    className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200 text-xs font-medium"
-                    aria-label="Dismiss error"
-                  >
-                    ✕
-                  </button>
                 </div>
-              )}
-          </div>
+                
+                {/* Connection error message for servers */}
+                {connectionErrors.has(bookmark.id) && (
+                  <div className={`px-2 py-1.5 bg-red-50 dark:bg-red-900/20 border-l-2 border-red-500 flex items-center justify-between gap-2 ${
+                    isEven 
+                      ? 'bg-red-50 dark:bg-red-900/20' 
+                      : 'bg-red-100 dark:bg-red-900/30'
+                  }`}>
+                    <p className="text-xs text-red-800 dark:text-red-200 font-medium flex-1">
+                      {connectionErrors.get(bookmark.id)}
+                    </p>
+                    <button
+                      onClick={() => {
+                        setConnectionErrors((prev) => {
+                          const next = new Map(prev);
+                          next.delete(bookmark.id);
+                          return next;
+                        });
+                      }}
+                      className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200 text-xs font-medium"
+                      aria-label="Dismiss error"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
+              </Fragment>
+            )
           );
         })}
       </div>

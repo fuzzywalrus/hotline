@@ -1,10 +1,16 @@
 import { useState, useEffect } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { usePreferencesStore } from '../../stores/preferencesStore';
+import { useAppStore } from '../../stores/appStore';
+import { showNotification } from '../../stores/notificationStore';
+import type { Bookmark } from '../../types';
 
 export default function GeneralSettingsTab() {
   const { username, setUsername, fileCacheDepth, setFileCacheDepth, enablePrivateMessaging, setEnablePrivateMessaging, darkMode, setDarkMode } = usePreferencesStore();
+  const { setBookmarks } = useAppStore();
   const [localUsername, setLocalUsername] = useState(username);
   const [localFileCacheDepth, setLocalFileCacheDepth] = useState(fileCacheDepth);
+  const [isAddingDefaults, setIsAddingDefaults] = useState(false);
 
   useEffect(() => {
     setLocalUsername(username);
@@ -13,6 +19,23 @@ export default function GeneralSettingsTab() {
 
   const handleSave = () => {
     setUsername(localUsername.trim() || 'guest');
+  };
+
+  const handleAddDefaults = async () => {
+    setIsAddingDefaults(true);
+    try {
+      const updatedBookmarks = await invoke<Bookmark[]>('add_default_bookmarks');
+      setBookmarks(updatedBookmarks);
+      showNotification.success('Default bookmarks added successfully', 'Bookmarks Updated');
+    } catch (error) {
+      console.error('Failed to add default bookmarks:', error);
+      showNotification.error(
+        `Failed to add default bookmarks: ${error instanceof Error ? error.message : String(error)}`,
+        'Error'
+      );
+    } finally {
+      setIsAddingDefaults(false);
+    }
   };
 
   return (
@@ -125,6 +148,22 @@ export default function GeneralSettingsTab() {
             </div>
           </label>
         </div>
+      </div>
+
+      <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+          Bookmarks
+        </label>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+          Re-add default trackers and servers if you've deleted them.
+        </p>
+        <button
+          onClick={handleAddDefaults}
+          disabled={isAddingDefaults}
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-md font-medium disabled:cursor-not-allowed transition-colors"
+        >
+          {isAddingDefaults ? 'Adding...' : 'Re-add Default Servers & Trackers'}
+        </button>
       </div>
     </div>
   );

@@ -19,7 +19,8 @@
       "Bash(cargo clean:*)",
       "Bash(npm run check:*)",
       "Bash(npm run build:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(npx tsc:*)"
     ]
   }
 }

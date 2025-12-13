@@ -95,15 +95,10 @@ impl AppState {
         }
         }
         
-        // Ensure all default trackers exist
-        for (id, name, address, port) in &default_trackers {
-            let has_tracker = bookmarks.iter().any(|b: &Bookmark| {
-                b.address == *address 
-                && b.port == *port
-                && matches!(b.bookmark_type, Some(BookmarkType::Tracker))
-        });
-
-            if !has_tracker {
+        // Only add defaults on first load (empty bookmarks file)
+        if bookmarks.is_empty() {
+            // Add default trackers
+            for (id, name, address, port) in &default_trackers {
                 let tracker = Bookmark {
                     id: id.to_string(),
                     name: name.to_string(),
@@ -115,34 +110,25 @@ impl AppState {
                     auto_connect: false,
                     bookmark_type: Some(BookmarkType::Tracker),
                 };
-                bookmarks.insert(0, tracker);
-                needs_save = true;
+                bookmarks.push(tracker);
             }
-        }
-        
-        // Ensure all default servers exist
-        for (id, name, address, port) in &default_servers {
-            let has_server = bookmarks.iter().any(|b: &Bookmark| {
-                b.address == *address 
-                && b.port == *port
-                && matches!(b.bookmark_type, Some(BookmarkType::Server))
-            });
             
-            if !has_server {
+            // Add default servers
+            for (id, name, address, port) in &default_servers {
                 let server = Bookmark {
                     id: id.to_string(),
                     name: name.to_string(),
                     address: address.to_string(),
                     port: *port,
-                login: "guest".to_string(),
-                password: None,
-                icon: None,
-                auto_connect: false,
+                    login: "guest".to_string(),
+                    password: None,
+                    icon: None,
+                    auto_connect: false,
                     bookmark_type: Some(BookmarkType::Server),
-            };
+                };
                 bookmarks.push(server);
-            needs_save = true;
             }
+            needs_save = true;
         }
         
         // Save if we made any changes
@@ -534,12 +520,102 @@ impl AppState {
 
     pub async fn reorder_bookmarks(&self, new_bookmarks: Vec<Bookmark>) -> Result<(), String> {
         let mut bookmarks = self.bookmarks.write().await;
+        
+        // Validate that all bookmarks exist (prevent data loss)
+        let existing_ids: std::collections::HashSet<String> = bookmarks.iter().map(|b| b.id.clone()).collect();
+        let new_ids: std::collections::HashSet<String> = new_bookmarks.iter().map(|b| b.id.clone()).collect();
+        
+        if existing_ids != new_ids {
+            return Err("Bookmark reorder failed: bookmark count or IDs don't match".to_string());
+        }
+        
         *bookmarks = new_bookmarks;
 
         // Persist to disk
         self.save_bookmarks_to_disk(&bookmarks)?;
 
         Ok(())
+    }
+
+    pub async fn add_default_bookmarks(&self) -> Result<Vec<Bookmark>, String> {
+        use crate::protocol::constants::{DEFAULT_SERVER_PORT, DEFAULT_TRACKER_PORT};
+        use crate::protocol::types::BookmarkType;
+        
+        let mut bookmarks = self.bookmarks.write().await;
+        
+        // Define default trackers
+        let default_trackers = vec![
+            ("default-tracker-hltracker", "Featured Servers", "hltracker.com", DEFAULT_TRACKER_PORT),
+            ("default-tracker-mainecyber", "Maine Cyber", "tracked.mainecyber.com", DEFAULT_TRACKER_PORT),
+            ("default-tracker-preterhuman", "Preterhuman", "tracker.preterhuman.net", DEFAULT_TRACKER_PORT),
+        ];
+        
+        // Define default servers
+        let default_servers = vec![
+            ("default-server-system7", "System7 Today", "hotline.system7today.com", DEFAULT_SERVER_PORT),
+            ("default-server-bobkiwi", "Bob Kiwi's House", "73.132.202.107", DEFAULT_SERVER_PORT),
+            ("default-server-applearchive", "Apple Media Archive & Hotline Navigator", "hotline.semihosted.xyz", DEFAULT_SERVER_PORT),
+        ];
+        
+        let mut added_count = 0;
+        
+        // Add missing default trackers
+        for (id, name, address, port) in &default_trackers {
+            let has_tracker = bookmarks.iter().any(|b: &Bookmark| {
+                b.address == *address 
+                && b.port == *port
+                && matches!(b.bookmark_type, Some(BookmarkType::Tracker))
+            });
+            
+            if !has_tracker {
+                let tracker = Bookmark {
+                    id: id.to_string(),
+                    name: name.to_string(),
+                    address: address.to_string(),
+                    port: *port,
+                    login: "guest".to_string(),
+                    password: None,
+                    icon: None,
+                    auto_connect: false,
+                    bookmark_type: Some(BookmarkType::Tracker),
+                };
+                bookmarks.push(tracker);
+                added_count += 1;
+            }
+        }
+        
+        // Add missing default servers
+        for (id, name, address, port) in &default_servers {
+            let has_server = bookmarks.iter().any(|b: &Bookmark| {
+                b.address == *address 
+                && b.port == *port
+                && matches!(b.bookmark_type, Some(BookmarkType::Server))
+            });
+            
+            if !has_server {
+                let server = Bookmark {
+                    id: id.to_string(),
+                    name: name.to_string(),
+                    address: address.to_string(),
+                    port: *port,
+                    login: "guest".to_string(),
+                    password: None,
+                    icon: None,
+                    auto_connect: false,
+                    bookmark_type: Some(BookmarkType::Server),
+                };
+                bookmarks.push(server);
+                added_count += 1;
+            }
+        }
+        
+        if added_count > 0 {
+            // Persist to disk
+            self.save_bookmarks_to_disk(&bookmarks)?;
+        }
+        
+        let result = bookmarks.clone();
+        Ok(result)
     }
 
     pub async fn get_news_categories(&self, server_id: &str, path: Vec<String>) -> Result<Vec<crate::protocol::types::NewsCategory>, String> {

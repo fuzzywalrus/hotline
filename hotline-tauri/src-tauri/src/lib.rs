@@ -43,6 +43,7 @@ pub fn run() {
             commands::save_bookmark,
             commands::delete_bookmark,
             commands::reorder_bookmarks,
+            commands::add_default_bookmarks,
             commands::get_pending_agreement,
             commands::accept_agreement,
             commands::download_banner,

@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { usePreferencesStore, DarkModePreference } from '../stores/preferencesStore';
+import { usePreferencesStore } from '../stores/preferencesStore';
 
 /**
  * Hook to manage dark mode based on user preference and system settings
