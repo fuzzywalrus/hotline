@@ -3,8 +3,10 @@ import GeneralSettingsTab from './GeneralSettingsTab';
 import IconSettingsTab from './IconSettingsTab';
 import SoundSettingsTab from './SoundSettingsTab';
 import KeyboardShortcutsTab from './KeyboardShortcutsTab';
+import AboutSettingsTab from './AboutSettingsTab';
+import UpdateSettingsTab from './UpdateSettingsTab';
 
-type SettingsTab = 'general' | 'icon' | 'sound' | 'shortcuts';
+type SettingsTab = 'general' | 'icon' | 'sound' | 'shortcuts' | 'about' | 'updates';
 
 interface SettingsViewProps {
   onClose: () => void;
@@ -71,6 +73,26 @@ export default function SettingsView({ onClose }: SettingsViewProps) {
           >
             Shortcuts
           </button>
+          <button
+            onClick={() => setActiveTab('about')}
+            className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'about'
+                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
+            }`}
+          >
+            About
+          </button>
+          <button
+            onClick={() => setActiveTab('updates')}
+            className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'updates'
+                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
+            }`}
+          >
+            Updates
+          </button>
         </div>
 
         {/* Content */}
@@ -79,6 +101,8 @@ export default function SettingsView({ onClose }: SettingsViewProps) {
           {activeTab === 'icon' && <IconSettingsTab />}
           {activeTab === 'sound' && <SoundSettingsTab />}
           {activeTab === 'shortcuts' && <KeyboardShortcutsTab />}
+          {activeTab === 'about' && <AboutSettingsTab />}
+          {activeTab === 'updates' && <UpdateSettingsTab />}
         </div>
       </div>
     </div>

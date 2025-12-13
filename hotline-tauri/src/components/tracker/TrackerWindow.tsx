@@ -4,16 +4,14 @@ import { useAppStore } from '../../stores/appStore';
 import BookmarkList from './BookmarkList';
 import ConnectDialog from './ConnectDialog';
 import SettingsView from '../settings/SettingsView';
-import AboutView from '../about/AboutView';
-import UpdateView from '../update/UpdateView';
+import NotificationLog from '../notifications/NotificationLog';
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
 import type { Bookmark } from '../../types';
 
 export default function TrackerWindow() {
   const [showConnect, setShowConnect] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [showAbout, setShowAbout] = useState(false);
-  const [showUpdate, setShowUpdate] = useState(false);
+  const [showNotificationLog, setShowNotificationLog] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const { bookmarks, setBookmarks } = useAppStore();
 
@@ -85,18 +83,11 @@ export default function TrackerWindow() {
             ⚙️
           </button>
           <button
-            onClick={() => setShowAbout(true)}
+            onClick={() => setShowNotificationLog(true)}
             className="px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
-            title="About"
+            title="Notification Log"
           >
-            ℹ️
-          </button>
-          <button
-            onClick={() => setShowUpdate(true)}
-            className="px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
-            title="Check for Updates"
-          >
-            🔄
+            🔔
           </button>
         </div>
         </div>
@@ -151,11 +142,8 @@ export default function TrackerWindow() {
       {/* Settings dialog */}
       {showSettings && <SettingsView onClose={() => setShowSettings(false)} />}
       
-      {/* About dialog */}
-      {showAbout && <AboutView onClose={() => setShowAbout(false)} />}
-      
-      {/* Update dialog */}
-      {showUpdate && <UpdateView onClose={() => setShowUpdate(false)} />}
+      {/* Notification log */}
+      {showNotificationLog && <NotificationLog onClose={() => setShowNotificationLog(false)} />}
     </div>
   );
 }

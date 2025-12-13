@@ -6,6 +6,7 @@ interface ServerSidebarProps {
   onTabChange: (tab: ViewTab) => void;
   users: User[];
   onUserClick: (user: User) => void;
+  onUserRightClick?: (user: User, event: React.MouseEvent) => void;
   onOpenMessageDialog: (user: User) => void;
   unreadCounts: Map<number, number>;
 }
@@ -15,6 +16,7 @@ export default function ServerSidebar({
   onTabChange,
   users,
   onUserClick,
+  onUserRightClick,
   onOpenMessageDialog,
   unreadCounts,
 }: ServerSidebarProps) {
@@ -112,6 +114,7 @@ export default function ServerSidebar({
         <UserList
           users={users}
           onUserClick={onUserClick}
+          onUserRightClick={onUserRightClick}
           onOpenMessageDialog={onOpenMessageDialog}
           unreadCounts={unreadCounts}
         />

@@ -57,9 +57,9 @@ export default function NewsTab({
   onPostNews,
 }: NewsTabProps) {
   return (
-    <div className="flex-1 flex">
+    <div className="flex-1 flex h-full overflow-hidden">
       {/* Left panel: Categories and Articles */}
-      <div className="w-1/2 border-r border-gray-200 dark:border-gray-700 flex flex-col">
+      <div className="w-1/2 border-r border-gray-200 dark:border-gray-700 flex flex-col h-full overflow-hidden">
         {/* Path breadcrumb */}
         <div className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-2 flex items-center gap-2">
           <button
@@ -149,6 +149,11 @@ export default function NewsTab({
                   </div>
                   <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
                     by {article.poster}
+                    {article.date && (
+                      <span className="ml-2 text-gray-500 dark:text-gray-500">
+                        • {article.date}
+                      </span>
+                    )}
                     {article.parent_id > 0 && (
                       <span className="ml-2 text-blue-600 dark:text-blue-400">↳ Reply</span>
                     )}
@@ -171,7 +176,7 @@ export default function NewsTab({
       </div>
 
       {/* Right panel: Article viewer or composer */}
-      <div className="w-1/2 flex flex-col">
+      <div className="w-1/2 flex flex-col h-full overflow-hidden">
         {showComposer ? (
           /* Composer */
           <form onSubmit={onPostNews} className="flex-1 flex flex-col p-4">
@@ -209,6 +214,11 @@ export default function NewsTab({
               </h2>
               <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                 by {selectedArticle.poster}
+                {selectedArticle.date && (
+                  <span className="ml-2 text-gray-500 dark:text-gray-500">
+                    • {selectedArticle.date}
+                  </span>
+                )}
               </div>
             </div>
             <div className="flex-1 overflow-y-auto p-4">

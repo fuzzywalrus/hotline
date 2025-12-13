@@ -1,12 +1,14 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import type { ConnectionStatus } from '../../../types';
 import type { ChatMessage, FileItem, User } from '../serverTypes';
 import { useSound } from '../../../hooks/useSound';
 import { useAppStore } from '../../../stores/appStore';
+import { showNotification } from '../../../stores/notificationStore';
 
 interface UseServerEventsProps {
   serverId: string;
+  serverName: string;
   setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
   setUsers: React.Dispatch<React.SetStateAction<User[]>>;
   setFiles: React.Dispatch<React.SetStateAction<FileItem[]>>;
@@ -28,6 +30,7 @@ interface UseServerEventsProps {
 
 export function useServerEvents({
   serverId,
+  serverName,
   setMessages,
   setUsers,
   setFiles,
@@ -47,25 +50,41 @@ export function useServerEvents({
   onFileListReceived,
 }: UseServerEventsProps) {
   const sounds = useSound();
+  const soundsRef = useRef(sounds);
+  const usersRef = useRef<User[]>([]);
+  
+  // Keep sounds ref up to date
+  useEffect(() => {
+    soundsRef.current = sounds;
+  }, [sounds]);
 
   // Listen for incoming chat messages
   useEffect(() => {
-    const unlisten = listen<ChatMessage>(`chat-message-${serverId}`, (event) => {
+    let isActive = true;
+    
+    const unlistenPromise = listen<ChatMessage>(`chat-message-${serverId}`, (event) => {
+      if (!isActive) return; // Prevent processing if effect has been cleaned up
+      
       setMessages((prev) => [...prev, {
         ...event.payload,
         timestamp: new Date(),
       }]);
-      sounds.playChatSound();
+      soundsRef.current.playChatSound();
     });
 
     return () => {
-      unlisten.then((fn) => fn()).catch(() => {});
+      isActive = false;
+      unlistenPromise.then((unlisten) => unlisten()).catch(() => {});
     };
-  }, [serverId, sounds, setMessages]);
+  }, [serverId, setMessages]);
 
   // Listen for broadcast messages
   useEffect(() => {
-    const unlisten = listen<{ message: string }>(`broadcast-message-${serverId}`, (event) => {
+    let isActive = true;
+    
+    const unlistenPromise = listen<{ message: string }>(`broadcast-message-${serverId}`, (event) => {
+      if (!isActive) return;
+      
       const broadcastMsg = event.payload.message;
       setMessages((prev) => [
         ...prev,
@@ -76,13 +95,14 @@ export function useServerEvents({
           timestamp: new Date(),
         },
       ]);
-      sounds.playServerMessageSound();
+      soundsRef.current.playServerMessageSound();
     });
 
     return () => {
-      unlisten.then((fn) => fn()).catch(() => {});
+      isActive = false;
+      unlistenPromise.then((unlisten) => unlisten()).catch(() => {});
     };
-  }, [serverId, sounds, setMessages]);
+  }, [serverId, setMessages]);
 
   // Listen for file list events
   useEffect(() => {
@@ -118,17 +138,25 @@ export function useServerEvents({
     };
   }, [serverId, setBoardPosts]);
 
+  // Sync usersRef when users are initially loaded or updated
+  // We'll update the ref in the user event handlers, but also need to handle initial load
+  // The ref will be updated in the join/leave/change handlers below
+
   // Listen for user events
   useEffect(() => {
-    const unlistenJoin = listen<{ userId: number; userName: string; iconId: number; flags: number }>(
+    let isActive = true;
+    
+    const unlistenJoinPromise = listen<{ userId: number; userName: string; iconId: number; flags: number }>(
       `user-joined-${serverId}`,
       (event) => {
+        if (!isActive) return;
+        
         setUsers((prev) => {
           if (prev.some(u => u.userId === event.payload.userId)) {
             return prev;
           }
           const { isAdmin, isIdle } = parseUserFlags(event.payload.flags);
-          return [...prev, {
+          const updated = [...prev, {
             userId: event.payload.userId,
             userName: event.payload.userName,
             iconId: event.payload.iconId,
@@ -136,42 +164,57 @@ export function useServerEvents({
             isAdmin,
             isIdle,
           }];
+          usersRef.current = updated;
+          return updated;
         });
-        sounds.playJoinSound();
+        soundsRef.current.playJoinSound();
       }
     );
 
-    const unlistenLeave = listen<{ userId: number }>(
+    const unlistenLeavePromise = listen<{ userId: number }>(
       `user-left-${serverId}`,
       (event) => {
-        setUsers((prev) => prev.filter(u => u.userId !== event.payload.userId));
-        sounds.playLeaveSound();
+        if (!isActive) return;
+        
+        setUsers((prev) => {
+          const updated = prev.filter(u => u.userId !== event.payload.userId);
+          usersRef.current = updated;
+          return updated;
+        });
+        soundsRef.current.playLeaveSound();
       }
     );
 
-    const unlistenChange = listen<{ userId: number; userName: string; iconId: number; flags: number }>(
+    const unlistenChangePromise = listen<{ userId: number; userName: string; iconId: number; flags: number }>(
       `user-changed-${serverId}`,
       (event) => {
-        setUsers((prev) => prev.map(u =>
-          u.userId === event.payload.userId
-            ? {
-                userId: event.payload.userId,
-                userName: event.payload.userName,
-                iconId: event.payload.iconId,
-                flags: event.payload.flags,
-                ...parseUserFlags(event.payload.flags),
-              }
-            : u
-        ));
+        if (!isActive) return;
+        
+        setUsers((prev) => {
+          const updated = prev.map(u =>
+            u.userId === event.payload.userId
+              ? {
+                  userId: event.payload.userId,
+                  userName: event.payload.userName,
+                  iconId: event.payload.iconId,
+                  flags: event.payload.flags,
+                  ...parseUserFlags(event.payload.flags),
+                }
+              : u
+          );
+          usersRef.current = updated;
+          return updated;
+        });
       }
     );
 
     return () => {
-      unlistenJoin.then((fn) => fn()).catch(() => {});
-      unlistenLeave.then((fn) => fn()).catch(() => {});
-      unlistenChange.then((fn) => fn()).catch(() => {});
+      isActive = false;
+      unlistenJoinPromise.then((fn) => fn()).catch(() => {});
+      unlistenLeavePromise.then((fn) => fn()).catch(() => {});
+      unlistenChangePromise.then((fn) => fn()).catch(() => {});
     };
-  }, [serverId, sounds, setUsers, parseUserFlags]);
+  }, [serverId, setUsers, parseUserFlags]);
 
   // Listen for private messages
   useEffect(() => {
@@ -179,12 +222,43 @@ export function useServerEvents({
       return; // Private messaging is disabled, don't listen for messages
     }
     
-    const unlisten = listen<{ userId: number; message: string }>(
+    let isActive = true;
+    
+    const unlistenPromise = listen<{ userId: number; message: string }>(
       `private-message-${serverId}`,
       (event) => {
+        if (!isActive) return;
+        
         const { userId, message } = event.payload;
 
-        sounds.playPrivateMessageSound();
+        soundsRef.current.playPrivateMessageSound();
+        
+        // Look up user name - try ref first, then fallback to querying state
+        let user = usersRef.current.find(u => u.userId === userId);
+        let userName = user?.userName;
+        
+        // If not found in ref, try to get from current users state
+        if (!userName) {
+          // Use a callback to get current users
+          setUsers((prev) => {
+            const foundUser = prev.find(u => u.userId === userId);
+            if (foundUser) {
+              userName = foundUser.userName;
+              usersRef.current = prev; // Sync ref
+            }
+            return prev; // Don't modify state
+          });
+        }
+        
+        const displayName = userName || `User ${userId}`;
+        
+        // Show notification for private message
+        showNotification.info(
+          message,
+          `Private message from ${displayName}`,
+          undefined,
+          serverName
+        );
 
         setPrivateMessageHistory((prev) => {
           const newHistory = new Map(prev);
@@ -209,9 +283,10 @@ export function useServerEvents({
     );
 
     return () => {
-      unlisten.then((fn) => fn()).catch(() => {});
+      isActive = false;
+      unlistenPromise.then((unlisten) => unlisten()).catch(() => {});
     };
-  }, [serverId, sounds, setPrivateMessageHistory, setUnreadCounts, enablePrivateMessaging]);
+  }, [serverId, setPrivateMessageHistory, setUnreadCounts, enablePrivateMessaging, setUsers]);
 
   // Listen for download progress events
   useEffect(() => {
@@ -306,6 +381,15 @@ export function useServerEvents({
           status: 'completed',
           endTime: new Date(),
         });
+        
+        // Show notification
+        showNotification.success(
+          `Download complete: ${event.payload.fileName}`,
+          'Download Complete',
+          undefined,
+          serverName
+        );
+        soundsRef.current.playFileTransferCompleteSound();
       }
     );
 
@@ -324,6 +408,15 @@ export function useServerEvents({
           status: 'completed',
           endTime: new Date(),
         });
+        
+        // Show notification
+        showNotification.success(
+          `Upload complete: ${event.payload.fileName}`,
+          'Upload Complete',
+          undefined,
+          serverName
+        );
+        soundsRef.current.playFileTransferCompleteSound();
       }
     );
 
@@ -343,6 +436,15 @@ export function useServerEvents({
           error: event.payload.error,
           endTime: new Date(),
         });
+        
+        // Show notification
+        showNotification.error(
+          `Download failed: ${event.payload.fileName}\n${event.payload.error}`,
+          'Download Error',
+          undefined,
+          serverName
+        );
+        soundsRef.current.playErrorSound();
       }
     );
 
@@ -362,6 +464,15 @@ export function useServerEvents({
           error: event.payload.error,
           endTime: new Date(),
         });
+        
+        // Show notification
+        showNotification.error(
+          `Upload failed: ${event.payload.fileName}\n${event.payload.error}`,
+          'Upload Error',
+          undefined,
+          serverName
+        );
+        soundsRef.current.playErrorSound();
       }
     );
 
@@ -381,7 +492,7 @@ export function useServerEvents({
         const newStatus = event.payload.status;
         setConnectionStatus(newStatus);
         if (newStatus === 'logged-in') {
-          sounds.playLoggedInSound();
+          soundsRef.current.playLoggedInSound();
         }
       }
     );

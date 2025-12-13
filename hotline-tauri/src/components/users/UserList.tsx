@@ -13,6 +13,7 @@ interface UserListProps {
   users: User[];
   unreadCounts: Map<number, number>;
   onUserClick: (user: User) => void;
+  onUserRightClick?: (user: User, event: React.MouseEvent) => void;
   onOpenMessageDialog?: (user: User) => void;
 }
 
@@ -27,8 +28,9 @@ export default function UserList({ users, unreadCounts, onUserClick }: UserListP
           <div
             key={user.userId}
             onClick={() => onUserClick(user)}
+            onContextMenu={(e) => onUserRightClick?.(user, e)}
             className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 py-1 px-2 rounded cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-            title={`Click to view user info${user.isAdmin ? ' (Admin)' : ''}${user.isIdle ? ' (Idle)' : ''}`}
+            title={`Click to message${user.isAdmin ? ' (Admin)' : ''}${user.isIdle ? ' (Idle)' : ''} | Right-click for menu`}
           >
             <UserIcon iconId={user.iconId} size={16} />
             <span className={`truncate flex-1 ${user.isIdle ? 'opacity-60 italic' : ''}`}>

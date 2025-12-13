@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import MessageDialog from '../chat/MessageDialog';
 import UserInfoDialog from '../users/UserInfoDialog';
+import { useContextMenu, ContextMenuRenderer, type ContextMenuItem } from '../common/ContextMenu';
 import ChatTab from '../chat/ChatTab';
 import BoardTab from '../board/BoardTab';
 import FilesTab from '../files/FilesTab';
@@ -10,6 +11,7 @@ import ServerBanner from './ServerBanner';
 import ServerHeader from './ServerHeader';
 import ServerSidebar from './ServerSidebar';
 import TransferList from '../transfers/TransferList';
+import NotificationLog from '../notifications/NotificationLog';
 import { ServerInfo, ConnectionStatus } from '../../types';
 import { useAppStore } from '../../stores/appStore';
 import { usePreferencesStore } from '../../stores/preferencesStore';
@@ -29,6 +31,8 @@ export default function ServerWindow({ serverId, serverName, onClose }: ServerWi
   const { setFileCache, getFileCache, clearFileCache, clearFileCachePath, addTransfer, updateTransfer } = useAppStore();
   const { fileCacheDepth, enablePrivateMessaging } = usePreferencesStore();
   const [showTransferList, setShowTransferList] = useState(false);
+  const [showNotificationLog, setShowNotificationLog] = useState(false);
+  const { contextMenu, showContextMenu, hideContextMenu } = useContextMenu();
   const [activeTab, setActiveTab] = useState<ViewTab>('chat');
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
@@ -116,7 +120,8 @@ export default function ServerWindow({ serverId, serverName, onClose }: ServerWi
   // Use server events hook (handles all event listeners)
   useServerEvents({
     serverId,
-    setMessages,
+    serverName,
+    setMessages, // Used for receiving chat messages from server
     setUsers,
     setFiles,
     setBoardPosts,
@@ -360,8 +365,33 @@ export default function ServerWindow({ serverId, serverName, onClose }: ServerWi
 
 
   const handleUserClick = (user: User) => {
-    // Open user info dialog
-    setUserInfoDialogUser(user);
+    // Open message dialog (chat) directly
+    handleOpenMessageDialog(user);
+  };
+  
+  const handleUserRightClick = (user: User, event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    const items: ContextMenuItem[] = [
+      {
+        label: 'Message',
+        icon: '💬',
+        action: () => {
+          handleOpenMessageDialog(user);
+        },
+      },
+      { divider: true, label: '', action: () => {} },
+      {
+        label: 'Get Info',
+        icon: 'ℹ️',
+        action: () => {
+          setUserInfoDialogUser(user);
+        },
+      },
+    ];
+    
+    showContextMenu(event, items);
   };
 
   const handleOpenMessageDialog = (user: User) => {
@@ -393,11 +423,11 @@ export default function ServerWindow({ serverId, serverName, onClose }: ServerWi
     handleNewsBack,
     handleSelectArticle,
   } = useServerHandlers({
-        serverId,
+    serverId,
+    serverName,
     currentPath,
     setMessage,
     setSending,
-    setMessages,
     setBoardMessage,
     setPostingBoard,
     setBoardPosts,
@@ -487,6 +517,7 @@ export default function ServerWindow({ serverId, serverName, onClose }: ServerWi
         connectionStatus={connectionStatus}
         onDisconnect={handleDisconnect}
         onShowTransfers={() => setShowTransferList(true)}
+        onShowNotificationLog={() => setShowNotificationLog(true)}
       />
 
       {/* Main content */}
@@ -496,6 +527,7 @@ export default function ServerWindow({ serverId, serverName, onClose }: ServerWi
           onTabChange={setActiveTab}
           users={users}
           onUserClick={handleUserClick}
+          onUserRightClick={handleUserRightClick}
           onOpenMessageDialog={handleOpenMessageDialog}
           unreadCounts={unreadCounts}
         />
@@ -633,6 +665,17 @@ export default function ServerWindow({ serverId, serverName, onClose }: ServerWi
           onClose={() => setShowTransferList(false)}
         />
       )}
+
+      {/* Notification Log */}
+      {showNotificationLog && (
+        <NotificationLog onClose={() => setShowNotificationLog(false)} />
+      )}
+
+      {/* Context menu */}
+      <ContextMenuRenderer
+        contextMenu={contextMenu}
+        onClose={hideContextMenu}
+      />
     </div>
   );
 }

@@ -1,13 +1,14 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { NewsArticle } from '../serverTypes';
 import { useSound } from '../../../hooks/useSound';
+import { showNotification } from '../../../stores/notificationStore';
 
 interface UseServerHandlersProps {
   serverId: string;
+  serverName: string;
   currentPath: string[];
   setMessage: React.Dispatch<React.SetStateAction<string>>;
   setSending: React.Dispatch<React.SetStateAction<boolean>>;
-  setMessages: React.Dispatch<React.SetStateAction<any[]>>;
   setBoardMessage: React.Dispatch<React.SetStateAction<string>>;
   setPostingBoard: React.Dispatch<React.SetStateAction<boolean>>;
   setBoardPosts: React.Dispatch<React.SetStateAction<string[]>>;
@@ -27,10 +28,10 @@ interface UseServerHandlersProps {
 
 export function useServerHandlers({
   serverId,
+  serverName,
   currentPath,
   setMessage,
   setSending,
-  setMessages,
   setBoardMessage,
   setPostingBoard,
   setBoardPosts,
@@ -61,17 +62,17 @@ export function useServerHandlers({
         message: messageText,
       });
 
-      setMessages((prev) => [...prev, {
-        userId: 0,
-        userName: 'Me',
-        message: messageText,
-        timestamp: new Date(),
-      }]);
-
+      // Don't add message locally - wait for server echo to avoid duplicates
+      // The server will echo the message back as a ChatMessage event
       setMessage('');
     } catch (error) {
       console.error('Failed to send message:', error);
-      alert(`Failed to send message: ${error}`);
+      showNotification.error(
+        `Failed to send message: ${error}`,
+        'Message Error',
+        undefined,
+        serverName
+      );
     } finally {
       setSending(false);
     }
@@ -97,7 +98,12 @@ export function useServerHandlers({
       setBoardMessage('');
     } catch (error) {
       console.error('Failed to post to board:', error);
-      alert(`Failed to post to board: ${error}`);
+      showNotification.error(
+        `Failed to post to board: ${error}`,
+        'Post Error',
+        undefined,
+        serverName
+      );
     } finally {
       setPostingBoard(false);
     }
@@ -120,7 +126,12 @@ export function useServerHandlers({
         return next;
       });
 
-      alert(`✅ ${result}`);
+      showNotification.success(
+        result,
+        'Download Complete',
+        undefined,
+        serverName
+      );
       sounds.playFileTransferCompleteSound();
     } catch (error) {
       console.error('Download failed:', error);
@@ -132,7 +143,12 @@ export function useServerHandlers({
         return next;
       });
 
-      alert(`❌ Download failed: ${error}`);
+      showNotification.error(
+        `Download failed: ${error}`,
+        'Download Error',
+        undefined,
+        serverName
+      );
     }
   };
 
@@ -163,7 +179,12 @@ export function useServerHandlers({
         path: currentPath,
       });
 
-      alert(`✅ Upload complete: ${fileName}`);
+      showNotification.success(
+        `Upload complete: ${fileName}`,
+        'Upload Complete',
+        undefined,
+        serverName
+      );
       sounds.playFileTransferCompleteSound();
     } catch (error) {
       console.error('Upload failed:', error);
@@ -175,7 +196,12 @@ export function useServerHandlers({
         return next;
       });
 
-      alert(`❌ Upload failed: ${error}`);
+      showNotification.error(
+        `Upload failed: ${error}`,
+        'Upload Error',
+        undefined,
+        serverName
+      );
     }
   };
 
@@ -212,7 +238,12 @@ export function useServerHandlers({
       setAgreementText(null);
     } catch (error) {
       console.error('Failed to accept agreement:', error);
-      alert(`Failed to accept agreement: ${error}`);
+      showNotification.error(
+        `Failed to accept agreement: ${error}`,
+        'Agreement Error',
+        undefined,
+        serverName
+      );
     }
   };
 
@@ -262,9 +293,19 @@ export function useServerHandlers({
       console.error('Failed to post news:', error);
       const errorMsg = String(error);
       if (errorMsg.includes('Error code: 1') || errorMsg.toLowerCase().includes('permission')) {
-        alert(`Unable to post news article:\n\n${error}\n\nYou may not have posting privileges on this server. Contact the server administrator to request access.`);
+        showNotification.error(
+          `Unable to post news article: ${error}\n\nYou may not have posting privileges on this server. Contact the server administrator to request access.`,
+          'Permission Denied',
+          undefined,
+          serverName
+        );
       } else {
-        alert(`Failed to post news: ${error}`);
+        showNotification.error(
+          `Failed to post news: ${error}`,
+          'Post Error',
+          undefined,
+          serverName
+        );
       }
     } finally {
       setPostingNews(false);
