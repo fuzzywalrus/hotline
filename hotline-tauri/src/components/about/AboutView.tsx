@@ -20,7 +20,7 @@ export default function AboutView({ onClose }: AboutViewProps) {
         {/* Header */}
         <div className="bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between rounded-t-lg">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-            About Hotline
+            About Hotline Navigator
           </h2>
           <button
             onClick={onClose}
@@ -35,9 +35,9 @@ export default function AboutView({ onClose }: AboutViewProps) {
           {/* Logo/Icon */}
           <div className="flex justify-center">
             <img
-              src="/about-icon.png"
-              alt="Hotline"
-              className="w-16 h-16"
+              src="/app-icon.png"
+              alt="Hotline Navigator"
+              className="w-20 h-20"
               onError={(e) => {
                 // Fallback to placeholder if image fails to load
                 const target = e.target as HTMLImageElement;
@@ -47,7 +47,7 @@ export default function AboutView({ onClose }: AboutViewProps) {
                 }
               }}
             />
-            <div className="w-16 h-16 hidden items-center justify-center bg-blue-600 rounded-lg">
+            <div className="w-20 h-20 hidden items-center justify-center bg-blue-600 rounded-lg">
               <span className="text-3xl font-bold text-white">H</span>
             </div>
           </div>
@@ -55,7 +55,7 @@ export default function AboutView({ onClose }: AboutViewProps) {
           {/* App Name */}
           <div className="text-center">
             <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
-              Hotline
+              Hotline Navigator
             </h3>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
               Version {version}
@@ -65,10 +65,7 @@ export default function AboutView({ onClose }: AboutViewProps) {
           {/* Description */}
           <div className="text-center text-gray-600 dark:text-gray-400 text-sm">
             <p>
-              A modern Tauri-based client for the Hotline protocol.
-            </p>
-            <p className="mt-2">
-              Connect to Hotline servers, browse files, chat with users, and more.
+              A multi-platform port of Hotline, using Tauri, designed for a single pane interface.
             </p>
           </div>
 
