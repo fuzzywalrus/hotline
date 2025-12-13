@@ -14,8 +14,9 @@ This file tracks completed features and implementation notes for the Tauri port.
 8. ✅ Files & transfers (browse, download with progress)
 9. ✅ Settings & Preferences (username, icon selection, persistent storage)
 10. ✅ Server Agreement & Banner (agreement dialog, banner download and display)
-11. ⏸️ File uploads
-12. ⏸️ Accounts, About
+11. ✅ File uploads
+12. ✅ About Window (application information, version, credits)
+13. ⏸️ Accounts
 
 ---
 
@@ -31,7 +32,7 @@ This file tracks completed features and implementation notes for the Tauri port.
 ### Medium Priority Features
 - [x] Broadcast messages (server-wide announcements)
 - [x] Sound settings tab (add to Settings)
-- [ ] About window
+- [x] About window
 - [x] File preview (images, audio, text files - video excluded to avoid bandwidth issues)
 - [ ] Transfer list window (active/completed transfers)
 
@@ -1286,8 +1287,7 @@ Created domain-specific components in proper folders:
 - [x] Server agreement dialog (inline in chat view)
 - [x] Server info display (name, description, user count)
 - [x] Server banner download and display
-- [ ] Connection status indicators
-- [ ] Server statistics
+- [x] Connection status indicators
 
 ### UI/UX Improvements
 - [x] File preview (images, audio, text files - video excluded to avoid bandwidth issues)
@@ -1460,3 +1460,83 @@ Created domain-specific components in proper folders:
 - ✅ Preview navigation works
 - ✅ TypeScript compilation successful
 - ⏸️ Needs testing with various file types on live server
+
+### 2025-12-13: Sign-In Fix for Mobius Servers
+
+**What was completed:**
+- **Agreed Transaction Enhancement**: Updated `accept_agreement()` to include required fields for Mobius server compatibility
+- **User Information Fields**: Agreed transaction now includes UserName, UserIconId, and Options fields
+- **Immediate User List Request**: GetUserNameList is called immediately after agreement acceptance
+- **Reply Handling**: Added proper reply handling with timeout support
+
+**Problem:**
+- Some Hotline servers (notably Mobius) require the `Agreed` transaction (type 121) to include user information fields
+- The original implementation sent an empty Agreed transaction, which caused sign-in failures on Mobius servers
+- Mobius servers also require a GetUserNameList request immediately after agreement acceptance to complete the sign-in process
+
+**Solution:**
+- Updated `accept_agreement()` method in `chat.rs` to include:
+  - `UserName` field (FieldType::UserName) - Display name from preferences
+  - `UserIconId` field (FieldType::UserIconId) - Icon ID from preferences
+  - `Options` field (FieldType::Options) - User options (set to 0)
+- Added reply handling with 5-second timeout
+- Added immediate `get_user_list()` call after agreement acceptance
+- Handles empty replies gracefully (some servers send empty replies)
+
+**Files modified:**
+- `src-tauri/src/protocol/client/chat.rs` - Updated `accept_agreement()` method with required fields and user list call
+
+**Implementation details:**
+- **Agreed Transaction**: Type 121 with UserName (102), UserIconId (104), and Options (113) fields
+- **Reply Handling**: Waits up to 5 seconds for server reply, handles timeout/empty replies gracefully
+- **User List Request**: Calls `get_user_list()` immediately after agreement acceptance (required by Mobius)
+- **User Info Source**: Username and icon ID come from preferences store (set in Settings)
+
+**Testing status:**
+- ✅ Code compiles successfully
+- ✅ Agreed transaction includes required fields
+- ✅ User list requested after agreement
+- ✅ Reply handling implemented
+- ⏸️ Needs testing with Mobius server to verify sign-in works correctly
+
+**Next task:** Other features from development goals
+
+### 2025-12-13: About Window Implementation
+
+**What was completed:**
+- **About Window UI**: Created About window with application information, version, and credits
+- **Version Display**: Dynamically fetches application version from Tauri
+- **Credits Section**: Displays author information with links to website and GitHub
+- **Accessibility**: Accessible from TrackerWindow via info button (ℹ️)
+
+**About Window Features:**
+- Application name and version (dynamically fetched)
+- Application description
+- Credits section with:
+  - Author: Greg Gant with link to https://greggant.com
+  - Built with Tauri, React, and TypeScript
+  - GitHub project link: https://github.com/fuzzywalrus/hotline
+  - Forked from: https://github.com/mierau/hotline
+- Copyright notice: © 2025 Greg Gant
+- Dark mode support
+- Responsive layout with proper styling
+
+**Implementation Details:**
+- Uses Tauri's `getVersion()` API to fetch application version
+- Links open in default browser (opener plugin configured)
+- Modal dialog with backdrop overlay
+- Close button in header and footer
+- Clean, professional design matching app style
+
+**Files created/modified:**
+- `src/components/about/AboutView.tsx` - Updated with proper credits and author information
+- `src/components/tracker/TrackerWindow.tsx` - Already had About button integration
+
+**Testing status:**
+- ✅ About window displays correctly
+- ✅ Version fetched dynamically
+- ✅ Links open in browser
+- ✅ Dark mode support working
+- ✅ Credits information accurate
+
+**Next task:** Other features from development goals

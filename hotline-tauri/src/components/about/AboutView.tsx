@@ -79,6 +79,17 @@ export default function AboutView({ onClose }: AboutViewProps) {
             </h4>
             <div className="text-xs text-gray-600 dark:text-gray-400 space-y-2">
               <p>
+                <strong>Author:</strong>{' '}
+                <a
+                  href="https://greggant.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 dark:text-blue-400 hover:underline"
+                >
+                  Greg Gant
+                </a>
+              </p>
+              <p>
                 Built with <span className="font-mono">Tauri</span>, <span className="font-mono">React</span>, and <span className="font-mono">TypeScript</span>
               </p>
               <p>
@@ -112,7 +123,7 @@ export default function AboutView({ onClose }: AboutViewProps) {
 
           {/* Copyright */}
           <div className="text-center text-xs text-gray-500 dark:text-gray-500 pt-2 border-t border-gray-200 dark:border-gray-700">
-            <p>© 2025 Hotline Tauri Client</p>
+            <p>© 2025 Greg Gant</p>
           </div>
         </div>
 
