@@ -63,7 +63,7 @@ function SortableItem({ id, children }: SortableItemProps) {
 }
 
 export default function BookmarkList({ bookmarks, searchQuery = '' }: BookmarkListProps) {
-  const { removeBookmark, addActiveServer, setFocusedServer, setBookmarks } = useAppStore();
+  const { removeBookmark, addActiveServer, addTab, setBookmarks } = useAppStore();
   const { username, userIconId } = usePreferencesStore();
   const [editingBookmark, setEditingBookmark] = useState<Bookmark | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -117,14 +117,22 @@ export default function BookmarkList({ bookmarks, searchQuery = '' }: BookmarkLi
       });
       console.log('Connected to server:', serverId);
 
-      // Add to active servers and open window
+      // Add to active servers and create new tab
       addActiveServer(serverId, {
         id: serverId,
         name: bookmark.name,
         address: bookmark.address,
         port: bookmark.port,
       });
-      setFocusedServer(serverId);
+      
+      // Add server tab
+      addTab({
+        id: `server-${serverId}`,
+        type: 'server',
+        serverId: serverId,
+        title: bookmark.name,
+        unreadCount: 0,
+      });
     } catch (error) {
       console.error('Failed to connect:', error);
       

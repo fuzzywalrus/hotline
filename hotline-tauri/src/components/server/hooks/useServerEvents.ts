@@ -52,6 +52,23 @@ export function useServerEvents({
   const sounds = useSound();
   const soundsRef = useRef(sounds);
   const usersRef = useRef<User[]>([]);
+  const { activeTabId, updateTabUnread } = useAppStore();
+  
+  // Helper to check if this server's tab is active
+  const isTabActive = () => {
+    const state = useAppStore.getState();
+    const tab = state.tabs.find(t => t.type === 'server' && t.serverId === serverId);
+    return tab?.id === state.activeTabId;
+  };
+  
+  // Helper to increment unread count for this server's tab
+  const incrementUnread = () => {
+    const state = useAppStore.getState();
+    const tab = state.tabs.find(t => t.type === 'server' && t.serverId === serverId);
+    if (tab && !isTabActive()) {
+      updateTabUnread(tab.id, tab.unreadCount + 1);
+    }
+  };
   
   // Keep sounds ref up to date
   useEffect(() => {
@@ -70,6 +87,11 @@ export function useServerEvents({
         timestamp: new Date(),
       }]);
       soundsRef.current.playChatSound();
+      
+      // Increment unread count if tab is not active
+      if (!isTabActive()) {
+        incrementUnread();
+      }
     });
 
     return () => {
@@ -279,6 +301,11 @@ export function useServerEvents({
           newCounts.set(userId, (newCounts.get(userId) || 0) + 1);
           return newCounts;
         });
+        
+        // Increment tab unread count if tab is not active
+        if (!isTabActive()) {
+          incrementUnread();
+        }
       }
     );
 
