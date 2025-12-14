@@ -4,9 +4,13 @@
 
 This a multi-platform spiritual poet of David Miwrau's wonderful Hotline app, built on Tauri currently for macOS Big Sur 11+ (x86/Arm64) Windows (x86) and debian Linux (x86/arm64) with an iOS and iPadOS port likwly.
 
-[Download the Latest](https://github.com/mierau/hotline/releases/latest)
+[Download the Latest](https://github.com/fuzzywalrus/hotline/releases/tag/v0.1.0)
 
 **Note:** This project (so far) does not include server software. This is a client for connecting to and participating on Hotline servers. If you would like to host your own Hotline server (and you should!), please checkout the very capable Mobius project: https://github.com/jhalter/mobius
+
+below is the original readme.
+
+---------
 
 # Requirements
 
