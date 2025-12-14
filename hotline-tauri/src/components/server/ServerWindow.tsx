@@ -29,7 +29,7 @@ interface ServerWindowProps {
 }
 
 export default function ServerWindow({ serverId, serverName, onClose }: ServerWindowProps) {
-  const { setFileCache, getFileCache, clearFileCache, clearFileCachePath, addTransfer, updateTransfer } = useAppStore();
+  const { setFileCache, getFileCache, clearFileCache, clearFileCachePath, addTransfer, updateTransfer, updateTabTitle } = useAppStore();
   const { fileCacheDepth, enablePrivateMessaging } = usePreferencesStore();
   const [showTransferList, setShowTransferList] = useState(false);
   const [showNotificationLog, setShowNotificationLog] = useState(false);
@@ -384,13 +384,15 @@ export default function ServerWindow({ serverId, serverName, onClose }: ServerWi
           const info = await invoke<ServerInfo>('get_server_info', { serverId });
           console.log('Server info fetched:', info);
           setServerInfo(info);
+          // Update tab title with actual server name
+          updateTabTitle(`server-${serverId}`, info.name || serverName);
         } catch (error) {
           console.error('Failed to fetch server info:', error);
         }
       };
       fetchServerInfo();
     }
-  }, [serverId, users.length, serverInfo]);
+  }, [serverId, users.length, serverInfo, serverName, updateTabTitle]);
 
 
   const handleUserClick = (user: User) => {
@@ -570,7 +572,7 @@ export default function ServerWindow({ serverId, serverName, onClose }: ServerWi
 
 
   return (
-    <div className="fixed inset-0 bg-white dark:bg-gray-900 z-50 flex flex-col">
+    <div className="h-full w-full bg-white dark:bg-gray-900 flex flex-col">
       <ServerBanner bannerUrl={bannerUrl} serverName={serverName} />
 
       <ServerHeader

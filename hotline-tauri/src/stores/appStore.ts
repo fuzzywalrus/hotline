@@ -19,6 +19,14 @@ interface FileItem {
 // File cache key is the path joined with '/'
 type FileCache = Map<string, FileItem[]>;
 
+export interface Tab {
+  id: string;
+  type: 'tracker' | 'server';
+  serverId?: string; // Only for server tabs
+  title: string;
+  unreadCount: number;
+}
+
 interface AppState {
   // Tracker bookmarks
   bookmarks: Bookmark[];
@@ -27,7 +35,11 @@ interface AppState {
   // Active servers
   activeServers: string[];
   serverInfo: Map<string, ServerInfo>;
-  focusedServer: string | null;
+  focusedServer: string | null; // Deprecated - use tabs instead
+
+  // Tab management
+  tabs: Tab[];
+  activeTabId: string | null;
 
   // File cache per server
   fileCache: Map<string, FileCache>;
@@ -48,9 +60,16 @@ interface AppState {
   addTracker: (tracker: TrackerBookmark) => void;
   removeTracker: (id: string) => void;
 
-  setFocusedServer: (serverId: string | null) => void;
+  setFocusedServer: (serverId: string | null) => void; // Deprecated
   addActiveServer: (serverId: string, info: ServerInfo) => void;
   removeActiveServer: (serverId: string) => void;
+
+  // Tab actions
+  addTab: (tab: Tab) => void;
+  removeTab: (tabId: string) => void;
+  setActiveTab: (tabId: string) => void;
+  updateTabUnread: (tabId: string, count: number) => void;
+  updateTabTitle: (tabId: string, title: string) => void;
 
   setShowAbout: (show: boolean) => void;
   setShowUpdate: (show: boolean) => void;
@@ -74,6 +93,8 @@ export const useAppStore = create<AppState>((set) => ({
   activeServers: [],
   serverInfo: new Map(),
   focusedServer: null,
+  tabs: [{ id: 'tracker-1', type: 'tracker', title: 'Tracker', unreadCount: 0 }], // Start with one tracker tab
+  activeTabId: 'tracker-1',
   showAbout: false,
   showUpdate: false,
   fileCache: new Map(),
@@ -109,7 +130,90 @@ export const useAppStore = create<AppState>((set) => ({
     trackers: state.trackers.filter((t) => t.id !== id),
   })),
 
-  setFocusedServer: (serverId) => set({ focusedServer: serverId }),
+  setFocusedServer: (serverId) => set({ focusedServer: serverId }), // Deprecated
+
+  // Tab actions
+  addTab: (tab) => set((state) => {
+    // Check if tab already exists (by serverId for server tabs, or by id)
+    const existingTab = state.tabs.find(t => 
+      (tab.type === 'server' && t.type === 'server' && t.serverId === tab.serverId) ||
+      t.id === tab.id
+    );
+    if (existingTab) {
+      // Tab exists, just switch to it
+      return { activeTabId: existingTab.id };
+    }
+    return {
+      tabs: [...state.tabs, tab],
+      activeTabId: tab.id,
+    };
+  }),
+
+  removeTab: (tabId) => set((state) => {
+    // Find the tab being closed
+    const tabToClose = state.tabs.find(t => t.id === tabId);
+    
+    // Don't allow closing tracker tabs
+    if (tabToClose?.type === 'tracker') {
+      return state;
+    }
+    
+    // Count tracker tabs
+    const trackerTabCount = state.tabs.filter(t => t.type === 'tracker').length;
+    const newTabs = state.tabs.filter(t => t.id !== tabId);
+    const newTrackerTabCount = newTabs.filter(t => t.type === 'tracker').length;
+    
+    // Ensure at least one tracker tab remains
+    if (newTrackerTabCount === 0 && trackerTabCount > 0) {
+      return state;
+    }
+    
+    if (state.tabs.length === 1) {
+      // Don't allow closing the last tab
+      return state;
+    }
+    
+    let newActiveTabId = state.activeTabId;
+    
+    // If we're closing the active tab, switch to another
+    if (tabId === state.activeTabId) {
+      const closedIndex = state.tabs.findIndex(t => t.id === tabId);
+      // Try to switch to tab to the right, or left if at end
+      if (closedIndex < newTabs.length) {
+        newActiveTabId = newTabs[closedIndex].id;
+      } else {
+        newActiveTabId = newTabs[newTabs.length - 1].id;
+      }
+    }
+    
+    return {
+      tabs: newTabs,
+      activeTabId: newActiveTabId,
+    };
+  }),
+
+  setActiveTab: (tabId) => set((state) => {
+    // Clear unread count when switching to a tab
+    const newTabs = state.tabs.map(t => 
+      t.id === tabId ? { ...t, unreadCount: 0 } : t
+    );
+    return {
+      tabs: newTabs,
+      activeTabId: tabId,
+    };
+  }),
+
+  updateTabUnread: (tabId, count) => set((state) => ({
+    tabs: state.tabs.map(t => 
+      t.id === tabId ? { ...t, unreadCount: count } : t
+    ),
+  })),
+
+  updateTabTitle: (tabId, title) => set((state) => ({
+    tabs: state.tabs.map(t => 
+      t.id === tabId ? { ...t, title } : t
+    ),
+  })),
 
   addActiveServer: (serverId, info) => set((state) => {
     const newServerInfo = new Map(state.serverInfo);
