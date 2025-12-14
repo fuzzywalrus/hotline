@@ -92,6 +92,22 @@ npm run build:macos-intel        # Intel (x86_64) only
 npm run build:macos-silicon      # Apple Silicon (aarch64) only
 ```
 
+**Linux (including ARM64):**
+```bash
+# Add Rust target for native ARM64 builds (on an ARM machine) or when using a proper cross toolchain
+rustup target add aarch64-unknown-linux-gnu
+
+# Build for x86_64 Linux
+npm run build:linux
+
+# Build for Linux ARM64 (aarch64)
+npm run build:linux-arm
+```
+
+Notes:
+- Cross-compiling from x86_64 to `aarch64-unknown-linux-gnu` requires an aarch64 cross toolchain (for example `aarch64-linux-gnu-gcc`) or using Docker/CI running on ARM64. For static MUSL builds you may need the `aarch64-unknown-linux-musl` target and musl cross toolchain.
+- The `build-release-all.sh` script will attempt to `rustup target add` the necessary targets automatically.
+
 **macOS Requirements:**
 - Both Rust targets: `rustup target add aarch64-apple-darwin x86_64-apple-darwin`
 - Minimum macOS version: Big Sur (11.0)
