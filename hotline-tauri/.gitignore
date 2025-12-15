@@ -27,3 +27,8 @@ dist-ssr
 .env
 .env.local
 .env.*.local
+
+# Release builds
+release/
+*.zip
+hotline-tauri/appimagetool-aarch64.AppImage
