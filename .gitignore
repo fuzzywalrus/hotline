@@ -25,4 +25,5 @@ IDEWorkspaceSharedSettings.plist
 *.lock
 *~.nib
 
+.env
 .claude/
