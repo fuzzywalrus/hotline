@@ -40,6 +40,7 @@ export default function FilesTab({
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Array<{ file: FileItem; path: string[] }>>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const navigationPendingRef = useRef(false);
   const { contextMenu, showContextMenu, hideContextMenu } = useContextMenu();
   const previewableExtensions = [
     // Images
@@ -105,15 +106,21 @@ export default function FilesTab({
     },
   ]);
 
+  // Reset navigation guard whenever the path actually changes
+  useEffect(() => {
+    navigationPendingRef.current = false;
+  }, [currentPath]);
+
   const handleFileClick = (file: FileItem, path?: string[]) => {
-    if (isLoading) {
-      return; // Prevent navigation while loading
+    if (isLoading || navigationPendingRef.current) {
+      return;
     }
     if (isSearching && path) {
       // If searching, navigate to the file's location
       onPathChange(path);
       setSearchQuery(''); // Clear search to show the directory
     } else if (file.isFolder) {
+      navigationPendingRef.current = true;
       onPathChange([...currentPath, file.name]);
     }
   };
@@ -399,10 +406,6 @@ export default function FilesTab({
                     isLoading && file.isFolder ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
                   }`}
                   onClick={() => handleFileClick(file, 'path' in item ? item.path : undefined)}
-                  onDoubleClick={(e) => {
-                    e.stopPropagation();
-                    handleFileClick(file, 'path' in item ? item.path : undefined);
-                  }}
                   onContextMenu={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
