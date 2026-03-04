@@ -1,4 +1,6 @@
 import { useRef, useEffect, useState } from 'react';
+import Linkify from '../common/Linkify';
+import { usePreferencesStore } from '../../stores/preferencesStore';
 
 interface ChatMessage {
   userId: number;
@@ -40,104 +42,19 @@ export default function ChatTab({
   onDeclineAgreement,
 }: ChatTabProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const [agreementExpanded, setAgreementExpanded] = useState(false);
   const [broadcastMode, setBroadcastMode] = useState(false);
   const [broadcastMessage, setBroadcastMessage] = useState('');
-  const agreementContentRef = useRef<HTMLDivElement>(null);
-  const [isAgreementExpandable, setIsAgreementExpandable] = useState(false);
-  const MAX_AGREEMENT_HEIGHT = 340;
+  const { clickableLinks } = usePreferencesStore();
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, agreementText]);
-
-  // Check if agreement is expandable
-  useEffect(() => {
-    if (agreementContentRef.current && agreementText) {
-      const height = agreementContentRef.current.scrollHeight;
-      setIsAgreementExpandable(height > MAX_AGREEMENT_HEIGHT);
-    }
-  }, [agreementText]);
-
-  // Debug: log when agreement text changes
-  useEffect(() => {
-    if (agreementText) {
-      console.log('ChatTab: Agreement text received, length:', agreementText.length);
-      console.log('ChatTab: Agreement text (first 100 chars):', agreementText.substring(0, 100));
-    } else {
-      console.log('ChatTab: No agreement text');
-    }
-  }, [agreementText]);
+  }, [messages]);
 
   return (
     <div className="flex-1 flex flex-col">
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-2">
-        {/* Server Agreement */}
-        {agreementText && (
-          <div className="flex flex-col items-center py-6 space-y-4">
-            {/* Banner above agreement */}
-            {bannerUrl && (
-              <div className="flex justify-center mb-2">
-                <img
-                  src={bannerUrl}
-                  alt="Server Banner"
-                  className="max-w-[468px] h-auto max-h-[60px] rounded-lg"
-                  style={{ imageRendering: 'auto' }}
-                />
-              </div>
-            )}
-
-            {/* Agreement text */}
-            <div className="w-full max-w-md">
-              <div
-                ref={agreementContentRef}
-                className={`bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 border border-gray-200 dark:border-gray-700 overflow-y-auto ${
-                  !agreementExpanded && isAgreementExpandable ? 'max-h-[340px]' : ''
-                }`}
-              >
-                <pre className="text-xs font-mono text-gray-900 dark:text-gray-100 whitespace-pre-wrap break-words">
-                  {agreementText}
-                </pre>
-              </div>
-
-              {/* Expand button */}
-              {isAgreementExpandable && !agreementExpanded && (
-                <div className="flex justify-end mt-2">
-                  <button
-                    onClick={() => setAgreementExpanded(true)}
-                    className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 flex items-center gap-1"
-                    title="Expand Server Agreement"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16l4-4m0 0l4 4m-4-4v12" />
-                    </svg>
-                    Expand
-                  </button>
-                </div>
-              )}
-
-              {/* Accept/Decline buttons */}
-              <div className="flex gap-3 justify-end mt-4">
-                <button
-                  onClick={onDeclineAgreement}
-                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-sm font-medium"
-                >
-                  Decline
-                </button>
-                <button
-                  onClick={onAcceptAgreement}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors text-sm font-medium"
-                >
-                  Accept
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        
         {messages.length === 0 && !agreementText ? (
           <div className="text-sm text-gray-500 dark:text-gray-400 text-center">
             Connected to {serverName}
@@ -205,7 +122,9 @@ export default function ChatTab({
                 >
                   {msg.userName}:
                 </span>{' '}
-                <span className="text-gray-900 dark:text-gray-100">{msg.message}</span>
+                <span className="text-gray-900 dark:text-gray-100">
+                  {clickableLinks ? <Linkify text={msg.message} /> : msg.message}
+                </span>
               </div>
             );
           })

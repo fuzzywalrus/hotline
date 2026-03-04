@@ -29,11 +29,17 @@ export default function UserList({ users, unreadCounts, onUserClick, onUserRight
             key={user.userId}
             onClick={() => onUserClick(user)}
             onContextMenu={(e) => onUserRightClick?.(user, e)}
-            className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 py-1 px-2 rounded cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+            className={`flex items-center gap-2 text-sm py-1 px-2 rounded cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors ${
+              user.isIdle
+                ? 'opacity-50 text-gray-500 dark:text-gray-500'
+                : user.isAdmin
+                  ? 'text-red-600 dark:text-red-400'
+                  : 'text-gray-700 dark:text-gray-300'
+            }`}
             title={`Click to message${user.isAdmin ? ' (Admin)' : ''}${user.isIdle ? ' (Idle)' : ''} | Right-click for menu`}
           >
             <UserIcon iconId={user.iconId} size={16} />
-            <span className={`truncate flex-1 ${user.isIdle ? 'opacity-60 italic' : ''}`}>
+            <span className={`truncate flex-1 ${user.isIdle ? 'italic' : ''}`}>
               {user.userName}
             </span>
             {user.isAdmin && (

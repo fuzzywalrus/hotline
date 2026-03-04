@@ -21,20 +21,18 @@ export default function UpdateSettingsTab() {
   const [error, setError] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
 
-  useEffect(() => {
-    getVersion().then(setCurrentVersion).catch(() => {
-      setCurrentVersion('0.1.1');
-    });
-  }, []);
-
   const checkForUpdates = async () => {
     setIsChecking(true);
     setError(null);
     setUpdate(null);
 
     try {
-      const release = await invoke<UpdateRelease | null>('check_for_updates');
-      
+      const [release, liveVersion] = await Promise.all([
+        invoke<UpdateRelease | null>('check_for_updates'),
+        getVersion().catch(() => currentVersion),
+      ]);
+      setCurrentVersion(liveVersion);
+
       if (release) {
         // Compare versions - parse semantic version (e.g., "0.1.0" or "v0.1.0")
         const parseVersion = (version: string): number[] => {
@@ -45,8 +43,8 @@ export default function UpdateSettingsTab() {
             return parseInt(numPart, 10) || 0;
           });
         };
-        
-        const currentParts = parseVersion(currentVersion);
+
+        const currentParts = parseVersion(liveVersion);
         const releaseParts = parseVersion(release.display_version);
         
         // Compare version parts

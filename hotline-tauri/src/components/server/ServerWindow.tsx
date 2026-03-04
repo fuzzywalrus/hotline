@@ -14,6 +14,7 @@ import ServerSidebar from './ServerSidebar';
 import MobileTabBar from './MobileTabBar';
 import TransferList from '../transfers/TransferList';
 import NotificationLog from '../notifications/NotificationLog';
+import Linkify from '../common/Linkify';
 import { ServerInfo, ConnectionStatus } from '../../types';
 import { useAppStore } from '../../stores/appStore';
 import { usePreferencesStore } from '../../stores/preferencesStore';
@@ -65,6 +66,7 @@ export default function ServerWindow({ serverId, serverName, onClose }: ServerWi
   const [unreadCounts, setUnreadCounts] = useState<Map<number, number>>(new Map());
   const [privateMessageHistory, setPrivateMessageHistory] = useState<Map<number, PrivateMessage[]>>(new Map());
   const [agreementText, setAgreementText] = useState<string | null>(null);
+  const [agreementDismissing, setAgreementDismissing] = useState(false);
   const [bannerUrl, setBannerUrl] = useState<string | null>(null);
   const [serverInfo, setServerInfo] = useState<ServerInfo | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('connecting');
@@ -671,7 +673,7 @@ export default function ServerWindow({ serverId, serverName, onClose }: ServerWi
 
 
   return (
-    <div className="h-full w-full bg-white dark:bg-gray-900 flex flex-col">
+    <div className="h-full w-full bg-white dark:bg-gray-900 flex flex-col relative">
       <ServerBanner bannerUrl={bannerUrl} serverName={serverName} />
 
       <ServerHeader
@@ -695,6 +697,60 @@ export default function ServerWindow({ serverId, serverName, onClose }: ServerWi
         unreadCounts={unreadCounts}
       />
 
+      {/* Server Agreement Modal */}
+      {agreementText && (
+        <div
+          className={`absolute inset-0 z-50 flex items-center justify-center transition-all duration-300 ease-in-out ${
+            agreementDismissing ? 'bg-black/0 backdrop-blur-none' : 'bg-black/60 backdrop-blur-sm'
+          }`}
+        >
+          <div
+            className={`bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-lg mx-6 flex flex-col max-h-[80vh] transition-all duration-300 ease-in-out ${
+              agreementDismissing ? 'opacity-0 scale-95 translate-y-2' : 'opacity-100 scale-100 translate-y-0'
+            }`}
+          >
+            <div className="flex justify-center pt-6 px-6 h-[84px] items-center">
+              {bannerUrl && (
+                <img
+                  src={bannerUrl}
+                  alt="Server Banner"
+                  className="max-w-full h-auto max-h-[60px] rounded-lg"
+                  style={{ imageRendering: 'auto' }}
+                />
+              )}
+            </div>
+            <div className="px-6 pt-5 pb-2">
+              <h2 className="text-base font-semibold text-gray-900 dark:text-white">Server Agreement</h2>
+            </div>
+            <div className="flex-1 overflow-y-auto px-6 pb-4">
+              <pre className="text-xs font-mono text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words">
+                <Linkify text={agreementText} />
+              </pre>
+            </div>
+            <div className="flex gap-3 justify-end px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+              <button
+                onClick={() => {
+                  setAgreementDismissing(true);
+                  setTimeout(() => { handleDeclineAgreement(); setAgreementDismissing(false); }, 300);
+                }}
+                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-sm font-medium"
+              >
+                Decline
+              </button>
+              <button
+                onClick={() => {
+                  setAgreementDismissing(true);
+                  setTimeout(() => { handleAcceptAgreement(); setAgreementDismissing(false); }, 300);
+                }}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors text-sm font-medium"
+              >
+                Accept
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main content */}
       <div className="flex-1 flex overflow-hidden">
         <ServerSidebar
@@ -710,7 +766,7 @@ export default function ServerWindow({ serverId, serverName, onClose }: ServerWi
         {/* Main area with content */}
         <div className="flex-1 flex overflow-hidden">
           {/* Content area */}
-          <div className="flex-1 overflow-auto">
+          <div className="flex-1 flex flex-col overflow-hidden">
           {/* Chat view */}
           {activeTab === 'chat' && (
             <ChatTab

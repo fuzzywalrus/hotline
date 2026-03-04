@@ -24,6 +24,7 @@ interface NotificationState {
   
   // Actions
   addNotification: (notification: Omit<Notification, 'id' | 'timestamp'>) => void;
+  addToHistory: (notification: Omit<Notification, 'id' | 'timestamp'>) => void;
   removeNotification: (id: string) => void;
   clearActiveNotifications: () => void;
   clearHistory: () => void;
@@ -70,6 +71,22 @@ export const useNotificationStore = create<NotificationState>()(
         }
       },
       
+      addToHistory: (notification) => {
+        const id = `notification-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        const newNotification: Notification = {
+          ...notification,
+          id,
+          timestamp: new Date(),
+          duration: notification.duration ?? 0,
+        };
+        set((state) => ({
+          notificationHistory: [
+            ...state.notificationHistory,
+            newNotification,
+          ].slice(-state.maxHistorySize),
+        }));
+      },
+
       removeNotification: (id) => {
         set((state) => ({
           activeNotifications: state.activeNotifications.filter((n) => n.id !== id),

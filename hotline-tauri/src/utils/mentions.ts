@@ -23,6 +23,21 @@ export function containsMention(message: string, username: string): boolean {
 }
 
 /**
+ * Detects if a message contains any of the given watch words (case-insensitive, whole-word)
+ * @param message - The chat message text
+ * @param watchWords - List of words to watch for
+ * @returns true if message contains any watch word
+ */
+export function containsWatchWord(message: string, watchWords: string[]): boolean {
+  if (!message || watchWords.length === 0) return false;
+  return watchWords.some((word) => {
+    if (!word.trim()) return false;
+    const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`\\b${escaped}\\b`, 'i').test(message);
+  });
+}
+
+/**
  * Extracts all @mentions from a message
  * @param message - The chat message text
  * @returns Array of mentioned usernames (without @)

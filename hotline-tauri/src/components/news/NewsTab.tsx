@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import Linkify from '../common/Linkify';
 
 interface NewsCategory {
   type: number;
@@ -380,7 +381,7 @@ export default function NewsTab({
             </div>
             <div className="flex-1 overflow-y-auto p-4">
               <pre className="text-sm text-gray-900 dark:text-gray-100 font-mono whitespace-pre-wrap break-words">
-                {articleContent}
+                <Linkify text={articleContent} />
               </pre>
             </div>
           </div>

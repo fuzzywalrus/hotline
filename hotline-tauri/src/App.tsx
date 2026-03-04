@@ -87,7 +87,11 @@ function App() {
           tabs.map((tab) => (
             <div
               key={tab.id}
-              className={`absolute inset-0 ${tab.id === activeTabId ? 'block' : 'hidden'}`}
+              className={`absolute inset-0 transition-all duration-200 ease-out ${
+              tab.id === activeTabId
+                ? 'opacity-100 translate-y-0 pointer-events-auto'
+                : 'opacity-0 translate-y-1 pointer-events-none'
+            }`}
             >
               {tab.type === 'tracker' && <TrackerWindow />}
               {tab.type === 'server' && tab.serverId && (() => {

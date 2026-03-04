@@ -6,10 +6,12 @@ import { showNotification } from '../../stores/notificationStore';
 import type { Bookmark } from '../../types';
 
 export default function GeneralSettingsTab() {
-  const { username, setUsername, enablePrivateMessaging, setEnablePrivateMessaging, darkMode, setDarkMode, downloadFolder, setDownloadFolder } = usePreferencesStore();
+  const { username, setUsername, enablePrivateMessaging, setEnablePrivateMessaging, darkMode, setDarkMode, downloadFolder, setDownloadFolder, clickableLinks, setClickableLinks, mentionPopup, setMentionPopup, mutedUsers, addMutedUser, removeMutedUser, watchWords, addWatchWord, removeWatchWord } = usePreferencesStore();
   const { setBookmarks } = useAppStore();
   const [localUsername, setLocalUsername] = useState(username);
   const [isAddingDefaults, setIsAddingDefaults] = useState(false);
+  const [muteInput, setMuteInput] = useState('');
+  const [watchInput, setWatchInput] = useState('');
 
   useEffect(() => {
     setLocalUsername(username);
@@ -88,6 +90,136 @@ export default function GeneralSettingsTab() {
             onChange={(e) => setEnablePrivateMessaging(e.target.checked)}
             className="ml-4 toggle toggle-primary"
           />
+        </div>
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between">
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Clickable Links
+            </label>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Make URLs in chat, board posts, news articles, and server agreements clickable.
+            </p>
+          </div>
+          <input
+            type="checkbox"
+            checked={clickableLinks}
+            onChange={(e) => setClickableLinks(e.target.checked)}
+            className="ml-4 toggle toggle-primary"
+          />
+        </div>
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between">
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Mention Pop-up Notifications
+            </label>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Show a pop-up when someone @mentions you in chat. Mentions are always logged to notification history.
+            </p>
+          </div>
+          <input
+            type="checkbox"
+            checked={mentionPopup}
+            onChange={(e) => setMentionPopup(e.target.checked)}
+            className="ml-4 toggle toggle-primary"
+          />
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          Muted Users
+        </label>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+          No notifications or sounds from these usernames.
+        </p>
+        {mutedUsers.length > 0 && (
+          <div className="mb-3 space-y-1">
+            {mutedUsers.map((u) => (
+              <div key={u} className="flex items-center justify-between px-3 py-1.5 bg-gray-100 dark:bg-gray-800 rounded-md">
+                <span className="text-sm text-gray-900 dark:text-gray-100">{u}</span>
+                <button
+                  onClick={() => removeMutedUser(u)}
+                  className="text-xs text-red-500 hover:text-red-700 dark:hover:text-red-400"
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={muteInput}
+            onChange={(e) => setMuteInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && muteInput.trim()) {
+                addMutedUser(muteInput.trim());
+                setMuteInput('');
+              }
+            }}
+            placeholder="Username to mute"
+            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+          />
+          <button
+            onClick={() => { if (muteInput.trim()) { addMutedUser(muteInput.trim()); setMuteInput(''); } }}
+            disabled={!muteInput.trim()}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-md text-sm font-medium disabled:cursor-not-allowed transition-colors"
+          >
+            Mute
+          </button>
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          Watch Words
+        </label>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+          Highlight and notify when any of these words appear in chat (case-insensitive, whole word).
+        </p>
+        {watchWords.length > 0 && (
+          <div className="mb-3 space-y-1">
+            {watchWords.map((w) => (
+              <div key={w} className="flex items-center justify-between px-3 py-1.5 bg-gray-100 dark:bg-gray-800 rounded-md">
+                <span className="text-sm text-gray-900 dark:text-gray-100">{w}</span>
+                <button
+                  onClick={() => removeWatchWord(w)}
+                  className="text-xs text-red-500 hover:text-red-700 dark:hover:text-red-400"
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={watchInput}
+            onChange={(e) => setWatchInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && watchInput.trim()) {
+                addWatchWord(watchInput.trim());
+                setWatchInput('');
+              }
+            }}
+            placeholder="Word to watch for"
+            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+          />
+          <button
+            onClick={() => { if (watchInput.trim()) { addWatchWord(watchInput.trim()); setWatchInput(''); } }}
+            disabled={!watchInput.trim()}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-md text-sm font-medium disabled:cursor-not-allowed transition-colors"
+          >
+            Add
+          </button>
         </div>
       </div>
 

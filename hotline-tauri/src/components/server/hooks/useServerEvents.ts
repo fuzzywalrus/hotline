@@ -5,8 +5,8 @@ import type { ChatMessage, FileItem, User } from '../serverTypes';
 import { useSound } from '../../../hooks/useSound';
 import { useAppStore } from '../../../stores/appStore';
 import { usePreferencesStore } from '../../../stores/preferencesStore';
-import { showNotification } from '../../../stores/notificationStore';
-import { containsMention } from '../../../utils/mentions';
+import { showNotification, useNotificationStore } from '../../../stores/notificationStore';
+import { containsMention, containsWatchWord } from '../../../utils/mentions';
 
 interface UseServerEventsProps {
   serverId: string;
@@ -55,7 +55,7 @@ export function useServerEvents({
   const soundsRef = useRef(sounds);
   const usersRef = useRef<User[]>([]);
   const { updateTabUnread } = useAppStore();
-  const { username } = usePreferencesStore();
+  const { username, mentionPopup, mutedUsers } = usePreferencesStore();
   
   // Helper to check if this server's tab is active
   const isTabActive = () => {
@@ -84,12 +84,20 @@ export function useServerEvents({
     
     const unlistenPromise = listen<ChatMessage>(`chat-message-${serverId}`, (event) => {
       if (!isActive) return; // Prevent processing if effect has been cleaned up
-      
-      // Check if message contains a mention of the current user
-      const isMention = containsMention(event.payload.message, username);
+
+      const prefs = usePreferencesStore.getState();
+      const isMuted = prefs.mutedUsers.some(
+        (u) => u.toLowerCase() === event.payload.userName.toLowerCase()
+      );
 
       // Look up sender's admin status from current users
       const sender = usersRef.current.find(u => u.userId === event.payload.userId);
+
+      // Check if message contains a mention of the current user or a watch word
+      const isMention = !isMuted && (
+        containsMention(event.payload.message, username) ||
+        containsWatchWord(event.payload.message, prefs.watchWords)
+      );
 
       const messageData = {
         ...event.payload,
@@ -97,21 +105,37 @@ export function useServerEvents({
         isMention,
         isAdmin: sender?.isAdmin ?? false,
       };
-      
+
       setMessages((prev) => [...prev, messageData]);
-      soundsRef.current.playChatSound();
-      
-      // If message contains mention and tab is not active, notify
-      if (isMention && !isTabActive()) {
-        incrementUnread();
-        showNotification.info(
-          `@${username} mentioned you in chat`,
-          `Mention from ${event.payload.userName}`,
-          undefined,
-          serverName
-        );
-      } else if (!isTabActive()) {
-        // Increment unread count for regular messages if tab is not active
+      if (!isMuted) soundsRef.current.playChatSound();
+
+      if (isMuted) return;
+
+      // Always log mentions/watch words to history; show toast only when tab is not active (and popup enabled)
+      if (isMention) {
+        const isWatchWord = !containsMention(event.payload.message, username) &&
+          containsWatchWord(event.payload.message, prefs.watchWords);
+        const notifMessage = isWatchWord
+          ? `Watch word matched in chat`
+          : `@${username} mentioned in chat`;
+        const notifTitle = `From ${event.payload.userName}`;
+        if (isTabActive() || !prefs.mentionPopup) {
+          useNotificationStore.getState().addToHistory({
+            type: 'info',
+            message: notifMessage,
+            title: notifTitle,
+            serverName,
+          });
+        } else {
+          showNotification.info(
+            notifMessage,
+            notifTitle,
+            undefined,
+            serverName
+          );
+        }
+      }
+      if (!isTabActive()) {
         incrementUnread();
       }
     });

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { getVersion } from '@tauri-apps/api/app';
+import { openUrl } from '@tauri-apps/plugin-opener';
 
 export default function AboutSettingsTab() {
   const [version, setVersion] = useState<string>('0.1.1');
@@ -65,7 +66,8 @@ export default function AboutSettingsTab() {
               href="https://greggant.com"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-blue-600 dark:text-blue-400 hover:underline"
+              onClick={(e) => { e.preventDefault(); openUrl('https://greggant.com'); }}
+              className="text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
             >
               Greg Gant
             </a>
@@ -82,7 +84,8 @@ export default function AboutSettingsTab() {
                 href="https://github.com/fuzzywalrus/hotline"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-blue-600 dark:text-blue-400 hover:underline"
+                onClick={(e) => { e.preventDefault(); openUrl('https://github.com/fuzzywalrus/hotline'); }}
+                className="text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
               >
                 GitHub: fuzzywalrus/hotline
               </a>
@@ -93,7 +96,8 @@ export default function AboutSettingsTab() {
                 href="https://github.com/mierau/hotline"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-blue-600 dark:text-blue-400 hover:underline"
+                onClick={(e) => { e.preventDefault(); openUrl('https://github.com/mierau/hotline'); }}
+                className="text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
               >
                 mierau/hotline
               </a>
@@ -104,7 +108,7 @@ export default function AboutSettingsTab() {
 
       {/* Copyright */}
       <div className="text-center text-xs text-gray-500 dark:text-gray-500 pt-2 border-t border-gray-200 dark:border-gray-700">
-        <p>© 2025 Greg Gant</p>
+        <p>© 2026 Greg Gant</p>
       </div>
     </div>
   );

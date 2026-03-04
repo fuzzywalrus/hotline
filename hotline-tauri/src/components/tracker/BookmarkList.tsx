@@ -63,7 +63,7 @@ function SortableItem({ id, children }: SortableItemProps) {
 }
 
 export default function BookmarkList({ bookmarks, searchQuery = '' }: BookmarkListProps) {
-  const { removeBookmark, addActiveServer, addTab, setBookmarks } = useAppStore();
+  const { removeBookmark, addActiveServer, addTab, setBookmarks, tabs, serverInfo, setActiveTab } = useAppStore();
   const { username, userIconId } = usePreferencesStore();
   const [editingBookmark, setEditingBookmark] = useState<Bookmark | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -98,6 +98,17 @@ export default function BookmarkList({ bookmarks, searchQuery = '' }: BookmarkLi
     if (bookmark.type === 'tracker' || bookmark.port === 5498) {
       console.log('Tracker detected, expanding instead of connecting:', bookmark.name);
       handleToggleTracker(bookmark.id);
+      return;
+    }
+
+    // If already connected to this server, just switch to its tab
+    const existingTab = tabs.find(t => {
+      if (t.type !== 'server' || !t.serverId) return false;
+      const info = serverInfo.get(t.serverId);
+      return info?.address === bookmark.address && info?.port === bookmark.port;
+    });
+    if (existingTab) {
+      setActiveTab(existingTab.id);
       return;
     }
 
@@ -658,7 +669,7 @@ export default function BookmarkList({ bookmarks, searchQuery = '' }: BookmarkLi
                       This indicates it's a saved server bookmark (not a tracker).
                       In the Swift app, server bookmarks show bookmark.fill before the server icon. */}
                   <svg className="w-[11px] h-[11px] text-gray-400 dark:text-gray-500 opacity-75 flex-shrink-0" fill="currentColor" viewBox="0 0 16 16">
-                    <path d="M2 2v12l6-3 6 3V2H2zm0-1h12a1 1 0 0 1 1 1v12a1 1 0 0 1-0.515 0.877l-6-3a1 1 0 0 1-0.97 0l-6 3A1 1 0 0 1 0 14V2a1 1 0 0 1 1-1z"/>
+                    <path d="M3 1a1 1 0 0 0-1 1v12.5l5.5-2.75L13 14.5V2a1 1 0 0 0-1-1H3z"/>
                   </svg>
                   
                   {/* Server icon - 16x16 */}

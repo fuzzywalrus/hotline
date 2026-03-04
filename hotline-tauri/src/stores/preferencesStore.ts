@@ -13,6 +13,20 @@ interface PreferencesState {
   downloadFolder: string | null;
   setDownloadFolder: (folder: string | null) => void;
 
+  // Link preferences
+  clickableLinks: boolean;
+  setClickableLinks: (enabled: boolean) => void;
+
+  // Mention preferences
+  mentionPopup: boolean;
+  setMentionPopup: (enabled: boolean) => void;
+  mutedUsers: string[];
+  addMutedUser: (username: string) => void;
+  removeMutedUser: (username: string) => void;
+  watchWords: string[];
+  addWatchWord: (word: string) => void;
+  removeWatchWord: (word: string) => void;
+
   // Sound preferences
   playSounds: boolean;
   playChatSound: boolean;
@@ -53,6 +67,28 @@ export const usePreferencesStore = create<PreferencesState>()(
       // Download preferences
       downloadFolder: null,
       setDownloadFolder: (downloadFolder) => set({ downloadFolder }),
+
+      // Link preferences
+      clickableLinks: true,
+      setClickableLinks: (clickableLinks) => set({ clickableLinks }),
+
+      // Mention preferences
+      mentionPopup: true,
+      setMentionPopup: (mentionPopup) => set({ mentionPopup }),
+      mutedUsers: [],
+      addMutedUser: (username) => set((state) => ({
+        mutedUsers: state.mutedUsers.includes(username) ? state.mutedUsers : [...state.mutedUsers, username],
+      })),
+      removeMutedUser: (username) => set((state) => ({
+        mutedUsers: state.mutedUsers.filter((u) => u !== username),
+      })),
+      watchWords: [],
+      addWatchWord: (word) => set((state) => ({
+        watchWords: state.watchWords.includes(word) ? state.watchWords : [...state.watchWords, word],
+      })),
+      removeWatchWord: (word) => set((state) => ({
+        watchWords: state.watchWords.filter((w) => w !== word),
+      })),
 
       // Sound preferences (all enabled by default)
       playSounds: true,

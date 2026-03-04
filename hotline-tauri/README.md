@@ -1,24 +1,24 @@
-# Hotline
+# Hotline Navigator (Tauri Client)
 
-A modern, cross-platform client for the Hotline protocol built with Tauri, React, and Rust.
+The Tauri/React/Rust client for the Hotline protocol — part of the [Hotline Navigator](https://github.com/fuzzywalrus/hotline) project. A modern, cross-platform client built with Tauri v2, React, and Rust.
 
-![Hotline Client](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue)
+![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux%20%7C%20iOS%20%7C%20iPadOS-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 ## About
 
-Hotline is a classic Internet protocol and community platform from the 1990s that provided chat, file sharing, news, and message boards - predating modern social platforms. This is a **cross-platform port** of the excellent [Swift/macOS Hotline client](https://github.com/mierau/hotline) by Mierau, bringing the protocol to Windows and Linux while maintaining full macOS support.
+Hotline is a classic Internet protocol and community platform from the 1990s that provided chat, file sharing, news, and message boards. This is a **cross-platform port** of the excellent [Swift/macOS Hotline client](https://github.com/mierau/hotline) by David Mierau — a recreation in Tauri using React and Rust, with the original source providing protocol reference and inspiration.
 
 ### Why This Port?
 
-While the original Swift version provides a beautiful, native macOS experience, this Tauri-based port offers:
+While the original Swift version provides a native macOS experience, this Tauri-based client offers:
 
-- **Cross-Platform Reach**: Runs on macOS, Windows, and Linux with a single codebase
-- **Long-Term Sustainability**: Built on widely-supported, modern technologies (React, Rust, Tauri)
-- **Broader Community**: Accessible to developers across all platforms, encouraging contributions
-- **Modern Tooling**: Benefits from the extensive React and Rust ecosystems
+- **Cross-Platform Reach**: Runs on macOS, Windows, Linux, iOS, and iPadOS (Android planned) from a single codebase
+- **Long-Term Sustainability**: Built on widely-supported technologies (React, Rust, Tauri v2)
+- **Broader Community**: Accessible to developers across all platforms
+- **Modern Tooling**: Benefits from the React and Rust ecosystems
 
-This port aims to complement, not replace, the original Swift client. macOS users seeking the most native experience should consider the [original Swift version](https://github.com/mierau/hotline).
+This project complements the [original Swift client](https://github.com/mierau/hotline). It does not include server software; for hosting your own Hotline server, see [Mobius](https://github.com/jhalter/mobius).
 
 ## Features
 
@@ -50,17 +50,19 @@ This port aims to complement, not replace, the original Swift client. macOS user
 
 ## Installation
 
+**Platform support:** macOS (x86_64, ARM64, Universal), Windows (x86_64), Linux (x86_64, ARM64), iOS, and iPadOS. Android is planned. See the [main project README](https://github.com/fuzzywalrus/hotline#platform-support) for details.
+
 ### Prerequisites
-- **Node.js** 18 or later
+- **Node.js** 20+ (recommended for Vite 7 / modern Tauri tooling)
 - **Rust** (stable channel)
-- **Tauri Dependencies** - [Platform-specific requirements](https://tauri.app/v1/guides/getting-started/prerequisites)
+- **Tauri v2** — [Platform-specific requirements](https://v2.tauri.app/start/prerequisites/)
 
 ### Development
 
-1. **Clone the repository**
+1. **Clone the repository** (this client lives in the `hotline-tauri` directory of the main repo)
    ```bash
-   git clone https://github.com/yourusername/hotline-tauri.git
-   cd hotline-tauri
+   git clone https://github.com/fuzzywalrus/hotline.git
+   cd hotline/hotline-tauri
    ```
 
 2. **Install dependencies**
@@ -69,6 +71,12 @@ This port aims to complement, not replace, the original Swift client. macOS user
    ```
 
 3. **Run in development mode**
+   ```bash
+   npm run dev
+   ```
+   This starts the Vite frontend only.
+
+4. **Run the full desktop app in development mode**
    ```bash
    npm run tauri dev
    ```
@@ -85,11 +93,25 @@ npm run build
 npm run tauri build
 ```
 
+**Windows build:**
+```bash
+npm run build:windows          # Windows x86_64 (MSVC)
+```
+
 **macOS-specific builds:**
 ```bash
 npm run build:macos-universal    # Universal binary (Intel + Apple Silicon)
 npm run build:macos-intel        # Intel (x86_64) only
 npm run build:macos-silicon      # Apple Silicon (aarch64) only
+```
+
+**iOS / iPadOS** (requires Xcode and CocoaPods; see repo root for platform support):
+```bash
+npm run ios:init                 # One-time: generate Xcode project
+npm run build:ios                # Build for device
+npm run build:ios-simulator      # Build for simulator
+npm run ios:dev                  # Run on device
+npm run ios:dev:simulator        # Run in simulator
 ```
 
 **Linux (including ARM64):**
@@ -106,7 +128,22 @@ npm run build:linux-arm
 
 Notes:
 - Cross-compiling from x86_64 to `aarch64-unknown-linux-gnu` requires an aarch64 cross toolchain (for example `aarch64-linux-gnu-gcc`) or using Docker/CI running on ARM64. For static MUSL builds you may need the `aarch64-unknown-linux-musl` target and musl cross toolchain.
-- The `build-release-all.sh` script will attempt to `rustup target add` the necessary targets automatically.
+- The `build-release-linux-arm64.sh` helper script attempts to add the ARM64 Rust target automatically.
+
+**Multi-platform release helper:**
+```bash
+npm run build:release-all
+```
+This runs the macOS/Windows/Linux build scripts in sequence and packages artifacts under `release/`.
+
+### Quality Checks
+
+```bash
+npm run typecheck
+npm run lint
+npm run test
+npm run test:coverage
+```
 
 **macOS Requirements:**
 - Both Rust targets: `rustup target add aarch64-apple-darwin x86_64-apple-darwin`
@@ -115,7 +152,7 @@ Notes:
 
 ### Release Builds (macOS Code Signing)
 
-For distribution-ready builds with code signing and notarization:
+For distribution-ready builds with code signing:
 
 1. **Create `.env` file** in project root:
    ```bash
@@ -135,7 +172,9 @@ For distribution-ready builds with code signing and notarization:
    - Code sign the application
    - Verify signatures
    - Create a DMG (if `create-dmg` is installed)
-   - Output to `release/hotline-{version}-macos/`
+   - Output to `release/hotline-navigator-{version}-macos/`
+
+**Notarization:** the script includes commented `notarytool`/`stapler` steps you can enable for your release flow.
 
 **Note:** The `.env` file is gitignored and contains sensitive credentials.
 
@@ -144,41 +183,55 @@ For distribution-ready builds with code signing and notarization:
 ```
 hotline-tauri/
 ├── src/                          # React frontend (TypeScript + Vite)
+│   ├── assets/                   # App images and static UI assets
 │   ├── components/
 │   │   ├── tracker/              # Server browser and bookmarks
 │   │   ├── server/               # Server window shell
+│   │   │   └── hooks/            # Server-specific event/handler hooks
 │   │   ├── chat/                 # Public and private chat
 │   │   ├── board/                # Message board
 │   │   ├── news/                 # News reader
 │   │   ├── files/                # File browser
+│   │   ├── about/                # About dialog
 │   │   ├── users/                # User list and info
 │   │   ├── settings/             # Preferences
 │   │   ├── notifications/        # Toast notifications
-│   │   └── transfers/            # Transfer manager
+│   │   ├── transfers/            # Transfer manager
+│   │   ├── update/               # App update UI
+│   │   ├── common/               # Shared UI (e.g. Linkify, ContextMenu)
+│   │   └── tabs/                 # Tab bar
 │   ├── stores/                   # Zustand state management
 │   ├── hooks/                    # Custom React hooks
-│   └── types/                    # TypeScript definitions
+│   ├── test/                     # Frontend test setup/helpers
+│   ├── types/                    # TypeScript definitions
+│   └── utils/                    # Shared utility functions
 ├── src-tauri/                    # Rust backend
 │   ├── src/
 │   │   ├── protocol/             # Hotline protocol implementation
-│   │   │   ├── client/           # Client connection logic
+│   │   │   ├── client/           # Client connection (chat, files, news, users)
 │   │   │   ├── tracker.rs        # Tracker protocol
-│   │   │   └── types.rs          # Protocol types
+│   │   │   ├── types.rs          # Protocol types
+│   │   │   ├── transaction.rs    # Transaction handling
+│   │   │   └── constants.rs      # Protocol constants
 │   │   ├── state/                # Application state
 │   │   ├── commands/             # Tauri IPC commands
+│   │   ├── lib.rs                # Plugin setup and entry
 │   │   └── main.rs               # Application entry point
 │   └── tauri.conf.json           # Tauri configuration
+├── build-release.sh              # Signed macOS release helper
+├── build-release-all.sh          # Multi-platform release helper
+├── build-release-linux-arm64.sh  # Linux ARM64 packaging helper
 └── public/
-    ├── icons/                    # User icons (629 classic icons)
+    ├── icons/                    # User icons (classic set)
     └── sounds/                   # Sound effects
 ```
 
 ## Technology Stack
 
 ### Frontend
-- **React 18** - UI framework
+- **React 19** - UI framework
 - **TypeScript** - Type safety
-- **Vite** - Build tool and dev server
+- **Vite 7** - Build tool and dev server
 - **Tailwind CSS** - Styling
 - **Zustand** - State management
 - **@dnd-kit** - Drag and drop functionality
@@ -223,7 +276,7 @@ When contributing, please:
 
 ## Credits
 
-This project is a port of the excellent **[Hotline client for macOS](https://github.com/mierau/hotline)** by **Mierau**. The original Swift implementation provided the protocol reference, UI inspiration, and feature set that made this cross-platform port possible.
+This project is a port of the excellent **[Hotline client for macOS](https://github.com/mierau/hotline)** by **David Mierau**. The original Swift implementation provided the protocol reference, UI inspiration, and feature set that made this cross-platform port possible.
 
 The Hotline protocol itself was created by **Hotline Communications** in the 1990s.
 
@@ -233,9 +286,11 @@ MIT License - See LICENSE file for details
 
 ## Links
 
+- **Hotline Navigator (this repo)**: https://github.com/fuzzywalrus/hotline
+- **Releases**: https://github.com/fuzzywalrus/hotline/releases
 - **Original Swift Client**: https://github.com/mierau/hotline
-- **Hotline Protocol Information**: (Coming soon)
-- **Issue Tracker**: https://github.com/yourusername/hotline-tauri/issues
+- **Mobius (Hotline server)**: https://github.com/jhalter/mobius
+- **Issue Tracker**: https://github.com/fuzzywalrus/hotline/issues
 
 ---
 

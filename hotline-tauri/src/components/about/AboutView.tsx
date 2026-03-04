@@ -124,7 +124,7 @@ export default function AboutView({ onClose }: AboutViewProps) {
 
           {/* Copyright */}
           <div className="text-center text-xs text-gray-500 dark:text-gray-500 pt-2 border-t border-gray-200 dark:border-gray-700">
-            <p>© 2025 Greg Gant</p>
+            <p>© 2026 Greg Gant</p>
           </div>
         </div>
 
