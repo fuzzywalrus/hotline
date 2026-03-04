@@ -84,16 +84,17 @@ describe('notificationStore', () => {
   });
 
   it('enforces max history size', () => {
-    useNotificationStore.getState().setMaxHistorySize(3);
+    // Store clamps maxHistorySize to 10–1000, so use 10 and add more than 10
+    useNotificationStore.getState().setMaxHistorySize(10);
 
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 15; i++) {
       useNotificationStore.getState().addNotification({
         type: 'info',
         message: `Message ${i}`,
       });
     }
 
-    expect(useNotificationStore.getState().notificationHistory).toHaveLength(3);
+    expect(useNotificationStore.getState().notificationHistory).toHaveLength(10);
   });
 
   it('clamps max history size between 10 and 1000', () => {

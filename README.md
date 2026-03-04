@@ -1,7 +1,9 @@
 
 # Hotline Navigator
 
-A modern, cross-platform Hotline client built with **Tauri**, React, and Rust. This is a spiritual port of David Mierau's wonderful [Hotline app](https://github.com/mierau/hotline), bringing the classic Hotline protocol to modern platforms.
+A modern, cross-platform Hotline client built with **Tauri**, React, and Rust. This is a spiritual port of David Mierau's wonderful [Hotline app](https://github.com/mierau/hotline), bringing the classic Hotline protocol to as many modern platforms as possible.
+
+This port is divergent from the original Swift/macOS Hotline client and is not a direct port, rather a recreation of it in Tauri using React and Rust, the source code providing valuable information about the protocol and how to implement it.
 
 ## Platform Support
 
