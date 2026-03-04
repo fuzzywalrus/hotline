@@ -6,7 +6,7 @@ import { showNotification } from '../../stores/notificationStore';
 import type { Bookmark } from '../../types';
 
 export default function GeneralSettingsTab() {
-  const { username, setUsername, enablePrivateMessaging, setEnablePrivateMessaging, darkMode, setDarkMode, downloadFolder, setDownloadFolder, clickableLinks, setClickableLinks, mentionPopup, setMentionPopup, mutedUsers, addMutedUser, removeMutedUser, watchWords, addWatchWord, removeWatchWord } = usePreferencesStore();
+  const { username, setUsername, enablePrivateMessaging, setEnablePrivateMessaging, darkMode, setDarkMode, downloadFolder, setDownloadFolder, showServerBanner, setShowServerBanner, clickableLinks, setClickableLinks, mentionPopup, setMentionPopup, mutedUsers, addMutedUser, removeMutedUser, watchWords, addWatchWord, removeWatchWord } = usePreferencesStore();
   const { setBookmarks } = useAppStore();
   const [localUsername, setLocalUsername] = useState(username);
   const [isAddingDefaults, setIsAddingDefaults] = useState(false);
@@ -88,6 +88,25 @@ export default function GeneralSettingsTab() {
             type="checkbox"
             checked={enablePrivateMessaging}
             onChange={(e) => setEnablePrivateMessaging(e.target.checked)}
+            className="ml-4 toggle toggle-primary"
+          />
+        </div>
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between">
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Server Banner
+            </label>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Show the server's banner image at the top of the server window.
+            </p>
+          </div>
+          <input
+            type="checkbox"
+            checked={showServerBanner}
+            onChange={(e) => setShowServerBanner(e.target.checked)}
             className="ml-4 toggle toggle-primary"
           />
         </div>

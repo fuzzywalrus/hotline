@@ -32,7 +32,7 @@ interface ServerWindowProps {
 
 export default function ServerWindow({ serverId, serverName, onClose }: ServerWindowProps) {
   const { setFileCache, getFileCache, clearFileCache, clearFileCachePath, addTransfer, updateTransfer, updateTabTitle } = useAppStore();
-  const { enablePrivateMessaging, downloadFolder } = usePreferencesStore();
+  const { enablePrivateMessaging, downloadFolder, showServerBanner } = usePreferencesStore();
   const [showTransferList, setShowTransferList] = useState(false);
   const [showNotificationLog, setShowNotificationLog] = useState(false);
   const { contextMenu, showContextMenu, hideContextMenu } = useContextMenu();
@@ -67,6 +67,7 @@ export default function ServerWindow({ serverId, serverName, onClose }: ServerWi
   const [privateMessageHistory, setPrivateMessageHistory] = useState<Map<number, PrivateMessage[]>>(new Map());
   const [agreementText, setAgreementText] = useState<string | null>(null);
   const [agreementDismissing, setAgreementDismissing] = useState(false);
+  const [agreementVisible, setAgreementVisible] = useState(false);
   const [bannerUrl, setBannerUrl] = useState<string | null>(null);
   const [serverInfo, setServerInfo] = useState<ServerInfo | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('connecting');
@@ -79,6 +80,17 @@ export default function ServerWindow({ serverId, serverName, onClose }: ServerWi
       console.log('🎨 Banner URL state is null');
     }
   }, [bannerUrl]);
+
+  // Trigger entrance animation when agreement appears
+  useEffect(() => {
+    if (agreementText) {
+      // Allow one frame for the DOM to render before starting the transition
+      const id = requestAnimationFrame(() => setAgreementVisible(true));
+      return () => cancelAnimationFrame(id);
+    } else {
+      setAgreementVisible(false);
+    }
+  }, [agreementText]);
 
   // Check for pending agreement and connection status when component mounts
   useEffect(() => {
@@ -674,7 +686,7 @@ export default function ServerWindow({ serverId, serverName, onClose }: ServerWi
 
   return (
     <div className="h-full w-full bg-white dark:bg-gray-900 flex flex-col relative">
-      <ServerBanner bannerUrl={bannerUrl} serverName={serverName} />
+      {showServerBanner && <ServerBanner bannerUrl={bannerUrl} serverName={serverName} />}
 
       <ServerHeader
         serverName={serverName}
@@ -701,12 +713,12 @@ export default function ServerWindow({ serverId, serverName, onClose }: ServerWi
       {agreementText && (
         <div
           className={`absolute inset-0 z-50 flex items-center justify-center transition-all duration-300 ease-in-out ${
-            agreementDismissing ? 'bg-black/0 backdrop-blur-none' : 'bg-black/60 backdrop-blur-sm'
+            agreementDismissing || !agreementVisible ? 'bg-black/0 backdrop-blur-none' : 'bg-black/60 backdrop-blur-sm'
           }`}
         >
           <div
             className={`bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-lg mx-6 flex flex-col max-h-[80vh] transition-all duration-300 ease-in-out ${
-              agreementDismissing ? 'opacity-0 scale-95 translate-y-2' : 'opacity-100 scale-100 translate-y-0'
+              agreementDismissing || !agreementVisible ? 'opacity-0 scale-95 translate-y-2' : 'opacity-100 scale-100 translate-y-0'
             }`}
           >
             <div className="flex justify-center pt-6 px-6 h-[84px] items-center">

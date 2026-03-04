@@ -13,6 +13,10 @@ interface PreferencesState {
   downloadFolder: string | null;
   setDownloadFolder: (folder: string | null) => void;
 
+  // Banner preferences
+  showServerBanner: boolean;
+  setShowServerBanner: (enabled: boolean) => void;
+
   // Link preferences
   clickableLinks: boolean;
   setClickableLinks: (enabled: boolean) => void;
@@ -67,6 +71,10 @@ export const usePreferencesStore = create<PreferencesState>()(
       // Download preferences
       downloadFolder: null,
       setDownloadFolder: (downloadFolder) => set({ downloadFolder }),
+
+      // Banner preferences
+      showServerBanner: true,
+      setShowServerBanner: (showServerBanner) => set({ showServerBanner }),
 
       // Link preferences
       clickableLinks: true,

@@ -69,19 +69,16 @@ impl HotlineClient {
             return Err(format!("Get message board failed: {}", error_msg));
         }
 
-        // Get the Data field containing all posts
-        let posts_data = reply
+        // Get raw bytes and split by divider lines before decoding.
+        // Boards can mix UTF-8 posts (modern clients) and Mac Roman posts (old clients).
+        // Decoding the whole blob at once causes mojibake when UTF-8 multi-byte sequences
+        // get misinterpreted as Mac Roman. Split first, decode each post individually.
+        let raw_data = reply
             .get_field(FieldType::Data)
-            .and_then(|f| f.to_string().ok())
+            .map(|f| f.data.clone())
             .unwrap_or_default();
 
-        // For now, return as single string in array (Swift does this too)
-        // TODO: Parse individual posts if server uses dividers
-        let posts = if posts_data.is_empty() {
-            Vec::new()
-        } else {
-            vec![posts_data]
-        };
+        let posts = parse_message_board_data(&raw_data);
 
         println!("Received message board: {} posts", posts.len());
 
@@ -865,4 +862,128 @@ impl HotlineClient {
 
         Ok(articles)
     }
+}
+
+// --- Message board parsing helpers ---
+// Boards mix UTF-8 (modern clients) and Mac Roman (old clients) posts.
+// We split on divider lines in raw bytes before decoding so each post
+// gets its own UTF-8 → Mac Roman fallback pass.
+
+fn split_raw_lines(data: &[u8]) -> Vec<Vec<u8>> {
+    let mut lines: Vec<Vec<u8>> = Vec::new();
+    let mut start = 0;
+    let mut i = 0;
+    while i < data.len() {
+        if data[i] == 0x0D {
+            lines.push(data[start..i].to_vec());
+            i += 1;
+            if i < data.len() && data[i] == 0x0A {
+                i += 1;
+            }
+            start = i;
+        } else if data[i] == 0x0A {
+            lines.push(data[start..i].to_vec());
+            i += 1;
+            start = i;
+        } else {
+            i += 1;
+        }
+    }
+    if start < data.len() {
+        lines.push(data[start..].to_vec());
+    }
+    lines
+}
+
+fn classify_divider_lead(line: &[u8]) -> Option<u8> {
+    const SEPS: &[u8] = &[b'_', b'-', b'=', b'~', b'*'];
+    const WS: &[u8] = &[b' ', b'\t'];
+    let s = line.iter().position(|b| !WS.contains(b))?;
+    let e = line.iter().rposition(|b| !WS.contains(b))? + 1;
+    let trimmed = &line[s..e];
+    let lead = *trimmed.first()?;
+    if !SEPS.contains(&lead) {
+        return None;
+    }
+    if trimmed.len() >= 15 && trimmed.iter().all(|b| SEPS.contains(b)) {
+        return Some(lead);
+    }
+    let lc = trimmed.iter().take_while(|b| SEPS.contains(b)).count();
+    let tc = trimmed.iter().rev().take_while(|b| SEPS.contains(b)).count();
+    if lc >= 5 && tc >= 5 {
+        return Some(lead);
+    }
+    None
+}
+
+fn find_canonical_divider(lines: &[Vec<u8>]) -> Option<u8> {
+    let mut counts: std::collections::HashMap<u8, usize> = std::collections::HashMap::new();
+    let mut order: std::collections::HashMap<u8, usize> = std::collections::HashMap::new();
+    for line in lines {
+        if let Some(ch) = classify_divider_lead(line) {
+            let n = order.len();
+            order.entry(ch).or_insert(n);
+            *counts.entry(ch).or_insert(0) += 1;
+        }
+    }
+    counts
+        .iter()
+        .max_by(|a, b| {
+            a.1.cmp(b.1).then_with(|| {
+                // Earlier first-seen wins on tie
+                order.get(b.0).unwrap_or(&usize::MAX).cmp(order.get(a.0).unwrap_or(&usize::MAX))
+            })
+        })
+        .map(|(c, _)| *c)
+}
+
+fn decode_post_bytes(data: &[u8]) -> Option<String> {
+    if data.is_empty() {
+        return None;
+    }
+    let s = if let Ok(s) = std::str::from_utf8(data) {
+        s.to_owned()
+    } else {
+        let (decoded, _, _) = encoding_rs::MACINTOSH.decode(data);
+        decoded.into_owned()
+    };
+    let s = s.replace('\r', "\n");
+    let trimmed = s.trim().to_string();
+    if trimmed.is_empty() { None } else { Some(trimmed) }
+}
+
+fn parse_message_board_data(data: &[u8]) -> Vec<String> {
+    if data.is_empty() {
+        return Vec::new();
+    }
+    let lines = split_raw_lines(data);
+    let canonical = find_canonical_divider(&lines);
+    let mut posts: Vec<String> = Vec::new();
+    let mut current: Vec<u8> = Vec::new();
+
+    for line in &lines {
+        if let (Some(lead), Some(canon)) = (classify_divider_lead(line), canonical) {
+            if lead == canon {
+                if !current.is_empty() {
+                    if let Some(post) = decode_post_bytes(&current) {
+                        posts.push(post);
+                    }
+                    current.clear();
+                }
+                continue;
+            }
+        }
+        if !current.is_empty() {
+            current.push(b'\n');
+        }
+        current.extend_from_slice(line);
+    }
+
+    if !current.is_empty() {
+        if let Some(post) = decode_post_bytes(&current) {
+            posts.push(post);
+        }
+    }
+
+    posts
 }

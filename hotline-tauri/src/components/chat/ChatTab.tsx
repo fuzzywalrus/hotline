@@ -42,19 +42,55 @@ export default function ChatTab({
   onDeclineAgreement: _onDeclineAgreement,
 }: ChatTabProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const isAtBottomRef = useRef(true);
   const [broadcastMode, setBroadcastMode] = useState(false);
   const [broadcastMessage, setBroadcastMessage] = useState('');
   const { clickableLinks } = usePreferencesStore();
 
-  // Auto-scroll to bottom when new messages arrive
+  const scrollToBottom = (smooth = true) => {
+    messagesEndRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'instant' });
+  };
+
+  const handleScroll = () => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    isAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 50;
+  };
+
+  // Auto-scroll to bottom when new messages arrive (only if already at bottom)
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (isAtBottomRef.current) {
+      scrollToBottom();
+    }
   }, [messages]);
 
+  // Auto-resize textarea as message content changes
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
+  }, [message]);
+
+  // Re-anchor to bottom on container resize (e.g. window resize)
+  useEffect(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(() => {
+      if (isAtBottomRef.current) {
+        scrollToBottom(false);
+      }
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   return (
-    <div className="flex-1 flex flex-col">
+    <div className="flex-1 flex flex-col min-h-0">
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-2">
+      <div ref={scrollContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto p-4 space-y-2">
         {messages.length === 0 && !agreementText ? (
           <div className="text-sm text-gray-500 dark:text-gray-400 text-center">
             Connected to {serverName}
@@ -199,13 +235,22 @@ export default function ChatTab({
               </svg>
             </button>
           )}
-          <input
-            type="text"
+          <textarea
+            ref={textareaRef}
+            rows={1}
             value={message}
             onChange={(e) => onMessageChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if (message.trim() && !sending && !agreementText) {
+                  (e.currentTarget.form as HTMLFormElement)?.requestSubmit();
+                }
+              }
+            }}
             placeholder={agreementText ? "Please accept or decline the server agreement" : "Type a message..."}
             disabled={sending || !!agreementText}
-            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 resize-none overflow-y-hidden leading-normal"
           />
           <button
             type="submit"

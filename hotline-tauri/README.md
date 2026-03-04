@@ -7,7 +7,7 @@ The Tauri/React/Rust client for the Hotline protocol — part of the [Hotline Na
 
 ## About
 
-Hotline is a classic Internet protocol and community platform from the 1990s that provided chat, file sharing, news, and message boards. This is a **cross-platform port** of the excellent [Swift/macOS Hotline client](https://github.com/mierau/hotline) by David Mierau — a recreation in Tauri using React and Rust, with the original source providing protocol reference and inspiration.
+Hotline is a classic Internet protocol and community platform from the 1990s that provided chat, file sharing, news, and message boards. This is a **cross-platform port** of the excellent [Swift/macOS Hotline client](https://github.com/mierau/hotline) by Dustin Mierau — a recreation in Tauri using React and Rust, with the original source providing protocol reference and inspiration.
 
 ### Why This Port?
 
@@ -276,7 +276,7 @@ When contributing, please:
 
 ## Credits
 
-This project is a port of the excellent **[Hotline client for macOS](https://github.com/mierau/hotline)** by **David Mierau**. The original Swift implementation provided the protocol reference, UI inspiration, and feature set that made this cross-platform port possible.
+This project is a port of the excellent **[Hotline client for macOS](https://github.com/mierau/hotline)** by **Dustin Mierau**. The original Swift implementation provided the protocol reference, UI inspiration, and feature set that made this cross-platform port possible.
 
 The Hotline protocol itself was created by **Hotline Communications** in the 1990s.
 
