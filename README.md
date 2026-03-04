@@ -12,7 +12,7 @@ This port is divergent from the original Swift/macOS Hotline client and is not a
 
 ## Platform Support
 
-Right now the iOS and iPadOS versions are not in the app store and must be built manually.  They work on said platforms!
+Right now the iOS and iPadOS versions are not in the app store and must be built manually.  The supported platforms are as follows:
 
 | Platform | Architecture | Status |
 |----------|--------------|--------|
