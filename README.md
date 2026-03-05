@@ -38,3 +38,5 @@ This is a **Tauri-based Hotline client** that provides a modern, cross-platform 
 
 For more details about the Tauri client implementation, see the [`hotline-tauri/README.md`](hotline-tauri/README.md).
 
+Looking for other Hotline Clinets, see [The Hotline Wiki](https://hlwiki.com/index.php/Clients_New)
+
