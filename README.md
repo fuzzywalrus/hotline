@@ -19,7 +19,7 @@ I made a video aobut the [the history of Hotline](https://www.youtube.com/watch?
 
 ## Platform Support
 
-Right now the iOS and iPadOS versions are not in the app store and must be built manually. Android support is planned.
+Right now the iOS, iPadOS, and Android versions are not in their respective app stores and must be built manually or sideloaded.
 
 | Platform | Architecture | Status |
 |----------|--------------|--------|
@@ -28,7 +28,7 @@ Right now the iOS and iPadOS versions are not in the app store and must be built
 | **Linux** | x86_64, ARM64 | ✅ Supported |
 | **iOS** | ARM64 | ✅ Supported (iOS 18.7+) |
 | **iPadOS** | ARM64 | ✅ Supported (iPadOS 18.7+) |
- |**Android**| ARM64 | TBA |
+| **Android** | ARM64, x86_64 | ✅ Supported (Android 7.0+) |
 
 [Download the Latest Release](https://github.com/fuzzywalrus/hotline/releases/)
 
@@ -36,7 +36,7 @@ Right now the iOS and iPadOS versions are not in the app store and must be built
 
 This is a **Tauri-based Hotline client** that provides a modern, cross-platform experience for the classic Hotline protocol. Built with React and Rust, it offers:
 
-- **Cross-Platform**: Single codebase for macOS, Windows, Linux, iOS, and iPadOS. Android Planned!
+- **Cross-Platform**: Single codebase for macOS, Windows, Linux, iOS, iPadOS, and Android
 - **Modern Stack**: React + TypeScript frontend, Rust backend
 - **Full Protocol Support**: Chat, file sharing, news, message boards, and more
 - **Native Performance**: Tauri's lightweight architecture for fast, efficient apps
