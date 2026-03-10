@@ -21,6 +21,8 @@ pub struct Bookmark {
     pub icon: Option<u16>,
     #[serde(default)]
     pub auto_connect: bool,
+    #[serde(default)]
+    pub tls: bool,
     #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
     pub bookmark_type: Option<BookmarkType>,
 }

@@ -31,7 +31,8 @@ interface ServerWindowProps {
 }
 
 export default function ServerWindow({ serverId, serverName, onClose }: ServerWindowProps) {
-  const { setFileCache, getFileCache, clearFileCache, clearFileCachePath, addTransfer, updateTransfer, updateTabTitle } = useAppStore();
+  const { setFileCache, getFileCache, clearFileCache, clearFileCachePath, addTransfer, updateTransfer, updateTabTitle, serverInfo: serverInfoMap } = useAppStore();
+  const isTls = serverInfoMap.get(serverId)?.tls ?? false;
   const { enablePrivateMessaging, downloadFolder, showServerBanner } = usePreferencesStore();
   const [showTransferList, setShowTransferList] = useState(false);
   const [showNotificationLog, setShowNotificationLog] = useState(false);
@@ -638,7 +639,7 @@ export default function ServerWindow({ serverId, serverName, onClose }: ServerWi
   };
 
   const handlePostNewsWrapper = async (e: React.FormEvent) => {
-    await handlePostNews(e, newsPath, composerTitle, composerBody, postingNews);
+    await handlePostNews(e, newsPath, composerTitle, composerBody, postingNews, selectedArticle?.id ?? 0);
   };
 
   // Load news when News tab is activated or path changes
@@ -693,6 +694,7 @@ export default function ServerWindow({ serverId, serverName, onClose }: ServerWi
         serverInfo={serverInfo}
         users={users}
         connectionStatus={connectionStatus}
+        isTls={isTls}
         onDisconnect={handleDisconnect}
         onShowTransfers={() => setShowTransferList(true)}
         onShowNotificationLog={() => setShowNotificationLog(true)}

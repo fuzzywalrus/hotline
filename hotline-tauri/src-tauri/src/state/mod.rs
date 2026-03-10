@@ -48,23 +48,23 @@ impl AppState {
                 .map_err(|e| format!("Failed to parse bookmarks: {}", e))?
         };
 
-        use crate::protocol::constants::{DEFAULT_SERVER_PORT, DEFAULT_TRACKER_PORT};
+        use crate::protocol::constants::{DEFAULT_SERVER_PORT, DEFAULT_TLS_PORT, DEFAULT_TRACKER_PORT};
         use crate::protocol::types::BookmarkType;
-        
+
         let mut needs_save = false;
-        
-        // Define default trackers
+
+        // Define default trackers: (id, name, address, port)
         let default_trackers = vec![
             ("default-tracker-hltracker", "Featured Servers", "hltracker.com", DEFAULT_TRACKER_PORT),
             ("default-tracker-mainecyber", "Maine Cyber", "tracked.mainecyber.com", DEFAULT_TRACKER_PORT),
             ("default-tracker-preterhuman", "Preterhuman", "tracker.preterhuman.net", DEFAULT_TRACKER_PORT),
         ];
-        
-        // Define default servers
+
+        // Define default servers: (id, name, address, port, tls)
         let default_servers = vec![
-            ("default-server-system7", "System7 Today", "hotline.system7today.com", DEFAULT_SERVER_PORT),
-            ("default-server-bobkiwi", "Bob Kiwi's House", "73.132.202.107", DEFAULT_SERVER_PORT),
-            ("default-server-applearchive", "Apple Media Archive & Hotline Navigator", "hotline.semihosted.xyz", DEFAULT_SERVER_PORT),
+            ("default-server-system7", "System7 Today", "hotline.system7today.com", DEFAULT_SERVER_PORT, false),
+            ("default-server-bobkiwi", "Bob Kiwi's House", "69.250.126.86", DEFAULT_SERVER_PORT, false),
+            ("default-server-applearchive", "Apple Media Archive & Hotline Navigator", "hotline.semihosted.xyz", DEFAULT_TLS_PORT, true),
         ];
         
         // Fix any existing default trackers that lost their type
@@ -81,18 +81,24 @@ impl AppState {
             }
         }
         
-        // Fix any existing default servers that lost their type
+        // Fix any existing default servers that lost their type or need TLS update
         for bookmark in bookmarks.iter_mut() {
-            for (id, name, address, port) in &default_servers {
-                if bookmark.id == *id || (bookmark.address == *address && bookmark.port == *port) {
+            for (id, name, address, _port, tls) in &default_servers {
+                if bookmark.id == *id || (bookmark.address == *address) {
                     if !matches!(bookmark.bookmark_type, Some(BookmarkType::Server)) {
                         bookmark.bookmark_type = Some(BookmarkType::Server);
                         bookmark.id = id.to_string();
                         bookmark.name = name.to_string();
-                    needs_save = true;
+                        needs_save = true;
+                    }
+                    // Update TLS setting if it changed
+                    if bookmark.tls != *tls {
+                        bookmark.tls = *tls;
+                        bookmark.port = if *tls { DEFAULT_TLS_PORT } else { DEFAULT_SERVER_PORT };
+                        needs_save = true;
+                    }
                 }
             }
-        }
         }
         
         // Only add defaults on first load (empty bookmarks file)
@@ -108,13 +114,14 @@ impl AppState {
                     password: None,
                     icon: None,
                     auto_connect: false,
+                    tls: false,
                     bookmark_type: Some(BookmarkType::Tracker),
                 };
                 bookmarks.push(tracker);
             }
-            
+
             // Add default servers
-            for (id, name, address, port) in &default_servers {
+            for (id, name, address, port, tls) in &default_servers {
                 let server = Bookmark {
                     id: id.to_string(),
                     name: name.to_string(),
@@ -124,6 +131,7 @@ impl AppState {
                     password: None,
                     icon: None,
                     auto_connect: false,
+                    tls: *tls,
                     bookmark_type: Some(BookmarkType::Server),
                 };
                 bookmarks.push(server);
@@ -152,17 +160,60 @@ impl AppState {
         Ok(())
     }
 
-    pub async fn connect_server(&self, bookmark: Bookmark, username: String, user_icon_id: u16) -> Result<String, String> {
+    pub async fn connect_server(&self, bookmark: Bookmark, username: String, user_icon_id: u16, auto_detect_tls: bool) -> Result<crate::commands::ConnectResult, String> {
         // Don't allow connecting to trackers - they use a different protocol
         if matches!(bookmark.bookmark_type, Some(crate::protocol::types::BookmarkType::Tracker)) {
             return Err("Cannot connect to tracker. Trackers are used to browse servers, not to connect directly.".to_string());
         }
 
+        let bookmark = bookmark;
         let server_id = bookmark.id.clone();
-        let client = HotlineClient::new(bookmark);
-        client.set_user_info(username, user_icon_id).await;
 
-        client.connect().await?;
+        // Auto-detect TLS: when enabled and the bookmark isn't already TLS, try
+        // connecting directly on port+100 (the Mobius TLS convention). If TLS fails
+        // or times out, fall back to plain on the original port. We intentionally
+        // skip a separate probe step — probing consumed a connection slot on the
+        // server and caused the real connection to be rejected.
+        let (client, final_tls, final_port) = if auto_detect_tls && !bookmark.tls {
+            let tls_port = bookmark.port + 100;
+            println!("Auto-detect TLS: trying {}:{} (TLS)...", bookmark.address, tls_port);
+
+            let mut tls_bookmark = bookmark.clone();
+            tls_bookmark.tls = true;
+            tls_bookmark.port = tls_port;
+
+            let tls_client = HotlineClient::new(tls_bookmark);
+            tls_client.set_user_info(username.clone(), user_icon_id).await;
+
+            match tokio::time::timeout(
+                std::time::Duration::from_secs(5),
+                tls_client.connect(),
+            ).await {
+                Ok(Ok(())) => {
+                    println!("Auto-detect TLS: connected via TLS on port {}", tls_port);
+                    (tls_client, true, tls_port)
+                }
+                Ok(Err(e)) => {
+                    println!("Auto-detect TLS: TLS failed ({}), falling back to plain on port {}", e, bookmark.port);
+                    let client = HotlineClient::new(bookmark.clone());
+                    client.set_user_info(username, user_icon_id).await;
+                    client.connect().await?;
+                    (client, false, bookmark.port)
+                }
+                Err(_) => {
+                    println!("Auto-detect TLS: timed out, falling back to plain on port {}", bookmark.port);
+                    let client = HotlineClient::new(bookmark.clone());
+                    client.set_user_info(username, user_icon_id).await;
+                    client.connect().await?;
+                    (client, false, bookmark.port)
+                }
+            }
+        } else {
+            let client = HotlineClient::new(bookmark.clone());
+            client.set_user_info(username, user_icon_id).await;
+            client.connect().await?;
+            (client, bookmark.tls, bookmark.port)
+        };
 
         // Get the event receiver from the client BEFORE storing it
         // (once stored, we can't move it)
@@ -297,7 +348,11 @@ impl AppState {
             println!("Event forwarding task ended for server {}", server_id_clone);
         });
 
-        Ok(server_id)
+        Ok(crate::commands::ConnectResult {
+            server_id,
+            tls: final_tls,
+            port: final_port,
+        })
     }
 
     pub async fn disconnect_server(&self, server_id: &str) -> Result<(), String> {
@@ -660,35 +715,35 @@ impl AppState {
     }
 
     pub async fn add_default_bookmarks(&self) -> Result<Vec<Bookmark>, String> {
-        use crate::protocol::constants::{DEFAULT_SERVER_PORT, DEFAULT_TRACKER_PORT};
+        use crate::protocol::constants::{DEFAULT_SERVER_PORT, DEFAULT_TLS_PORT, DEFAULT_TRACKER_PORT};
         use crate::protocol::types::BookmarkType;
-        
+
         let mut bookmarks = self.bookmarks.write().await;
-        
-        // Define default trackers
+
+        // Define default trackers: (id, name, address, port)
         let default_trackers = vec![
             ("default-tracker-hltracker", "Featured Servers", "hltracker.com", DEFAULT_TRACKER_PORT),
             ("default-tracker-mainecyber", "Maine Cyber", "tracked.mainecyber.com", DEFAULT_TRACKER_PORT),
             ("default-tracker-preterhuman", "Preterhuman", "tracker.preterhuman.net", DEFAULT_TRACKER_PORT),
         ];
-        
-        // Define default servers
+
+        // Define default servers: (id, name, address, port, tls)
         let default_servers = vec![
-            ("default-server-system7", "System7 Today", "hotline.system7today.com", DEFAULT_SERVER_PORT),
-            ("default-server-bobkiwi", "Bob Kiwi's House", "73.132.202.107", DEFAULT_SERVER_PORT),
-            ("default-server-applearchive", "Apple Media Archive & Hotline Navigator", "hotline.semihosted.xyz", DEFAULT_SERVER_PORT),
+            ("default-server-system7", "System7 Today", "hotline.system7today.com", DEFAULT_SERVER_PORT, false),
+            ("default-server-bobkiwi", "Bob Kiwi's House", "69.250.126.86", DEFAULT_SERVER_PORT, false),
+            ("default-server-applearchive", "Apple Media Archive & Hotline Navigator", "hotline.semihosted.xyz", DEFAULT_TLS_PORT, true),
         ];
-        
+
         let mut added_count = 0;
-        
+
         // Add missing default trackers
         for (id, name, address, port) in &default_trackers {
             let has_tracker = bookmarks.iter().any(|b: &Bookmark| {
-                b.address == *address 
+                b.address == *address
                 && b.port == *port
                 && matches!(b.bookmark_type, Some(BookmarkType::Tracker))
             });
-            
+
             if !has_tracker {
                 let tracker = Bookmark {
                     id: id.to_string(),
@@ -699,21 +754,21 @@ impl AppState {
                     password: None,
                     icon: None,
                     auto_connect: false,
+                    tls: false,
                     bookmark_type: Some(BookmarkType::Tracker),
                 };
                 bookmarks.push(tracker);
                 added_count += 1;
             }
         }
-        
+
         // Add missing default servers
-        for (id, name, address, port) in &default_servers {
+        for (id, name, address, port, tls) in &default_servers {
             let has_server = bookmarks.iter().any(|b: &Bookmark| {
-                b.address == *address 
-                && b.port == *port
+                b.address == *address
                 && matches!(b.bookmark_type, Some(BookmarkType::Server))
             });
-            
+
             if !has_server {
                 let server = Bookmark {
                     id: id.to_string(),
@@ -724,6 +779,7 @@ impl AppState {
                     password: None,
                     icon: None,
                     auto_connect: false,
+                    tls: *tls,
                     bookmark_type: Some(BookmarkType::Server),
                 };
                 bookmarks.push(server);

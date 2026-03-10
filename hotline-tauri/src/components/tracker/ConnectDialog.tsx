@@ -25,7 +25,9 @@ export default function ConnectDialog({ onClose }: ConnectDialogProps) {
     port: '5500',
     login: 'guest',
     password: '',
+    tls: false,
     type: 'server' as 'server' | 'tracker',
+    saveAsBookmark: true,
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -38,14 +40,16 @@ export default function ConnectDialog({ onClose }: ConnectDialogProps) {
       port: parseInt(formData.port),
       login: formData.login,
       password: formData.password || undefined,
+      tls: formData.tls,
       type: formData.type,
     };
 
     try {
-      await invoke('save_bookmark', { bookmark });
-      // Only add if it doesn't already exist (shouldn't happen, but safety check)
-      if (!bookmarks.some((b: Bookmark) => b.id === bookmark.id)) {
-        addBookmark(bookmark);
+      if (formData.saveAsBookmark) {
+        await invoke('save_bookmark', { bookmark });
+        if (!bookmarks.some((b: Bookmark) => b.id === bookmark.id)) {
+          addBookmark(bookmark);
+        }
       }
       handleClose();
     } catch (error) {
@@ -79,7 +83,11 @@ export default function ConnectDialog({ onClose }: ConnectDialogProps) {
             </label>
             <select
               value={formData.type}
-              onChange={(e) => setFormData({ ...formData, type: e.target.value as 'server' | 'tracker', port: e.target.value === 'tracker' ? '5498' : '5500' })}
+              onChange={(e) => {
+                const newType = e.target.value as 'server' | 'tracker';
+                const newPort = newType === 'tracker' ? '5498' : (formData.tls ? '5600' : '5500');
+                setFormData({ ...formData, type: newType, port: newPort, tls: newType === 'tracker' ? false : formData.tls });
+              }}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="server">Server</option>
@@ -127,6 +135,25 @@ export default function ConnectDialog({ onClose }: ConnectDialogProps) {
 
           {formData.type === 'server' && (
             <>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="tls"
+                  checked={formData.tls}
+                  onChange={(e) => {
+                    const newTls = e.target.checked;
+                    const newPort = newTls && formData.port === '5500' ? '5600'
+                      : !newTls && formData.port === '5600' ? '5500'
+                      : formData.port;
+                    setFormData({ ...formData, tls: newTls, port: newPort });
+                  }}
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <label htmlFor="tls" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Use TLS (Secure Connection)
+                </label>
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Login
@@ -152,6 +179,19 @@ export default function ConnectDialog({ onClose }: ConnectDialogProps) {
               </div>
             </>
           )}
+
+          <div className="flex items-center gap-2 pt-2">
+            <input
+              type="checkbox"
+              id="save-bookmark"
+              checked={formData.saveAsBookmark}
+              onChange={(e) => setFormData({ ...formData, saveAsBookmark: e.target.checked })}
+              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+            />
+            <label htmlFor="save-bookmark" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              Add to Bookmarks
+            </label>
+          </div>
 
           <div className="flex gap-3 pt-4">
             <button

@@ -64,8 +64,9 @@ function SortableItem({ id, children }: SortableItemProps) {
 
 export default function BookmarkList({ bookmarks, searchQuery = '' }: BookmarkListProps) {
   const { removeBookmark, addActiveServer, addTab, setBookmarks, tabs, serverInfo, setActiveTab } = useAppStore();
-  const { username, userIconId } = usePreferencesStore();
+  const { username, userIconId, autoDetectTls } = usePreferencesStore();
   const [editingBookmark, setEditingBookmark] = useState<Bookmark | null>(null);
+  const [addingBookmark, setAddingBookmark] = useState<Bookmark | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [connectingId, setConnectingId] = useState<string | null>(null);
   const [connectionErrors, setConnectionErrors] = useState<Map<string, string>>(new Map());
@@ -102,15 +103,19 @@ export default function BookmarkList({ bookmarks, searchQuery = '' }: BookmarkLi
     }
 
     // If already connected to this server, just switch to its tab
+    // Match by address only — port may differ due to TLS auto-detection (e.g. 5500 vs 5600)
     const existingTab = tabs.find(t => {
       if (t.type !== 'server' || !t.serverId) return false;
       const info = serverInfo.get(t.serverId);
-      return info?.address === bookmark.address && info?.port === bookmark.port;
+      return info?.address === bookmark.address;
     });
     if (existingTab) {
       setActiveTab(existingTab.id);
       return;
     }
+
+    // Don't start a new connection if one is already in progress
+    if (connectingId) return;
 
     setConnectingId(bookmark.id);
     // Clear any previous error for this bookmark
@@ -121,26 +126,28 @@ export default function BookmarkList({ bookmarks, searchQuery = '' }: BookmarkLi
     });
 
     try {
-      const serverId = await invoke<string>('connect_to_server', { 
+      const result = await invoke<{ serverId: string; tls: boolean; port: number }>('connect_to_server', {
         bookmark,
         username,
         userIconId,
+        autoDetectTls: autoDetectTls && !bookmark.tls, // Only probe if not already TLS
       });
-      console.log('Connected to server:', serverId);
+      console.log('Connected to server:', result.serverId, result.tls ? '(TLS)' : '(plain)');
 
       // Add to active servers and create new tab
-      addActiveServer(serverId, {
-        id: serverId,
+      addActiveServer(result.serverId, {
+        id: result.serverId,
         name: bookmark.name,
         address: bookmark.address,
-        port: bookmark.port,
+        port: result.port,
+        tls: result.tls,
       });
-      
+
       // Add server tab
       addTab({
-        id: `server-${serverId}`,
+        id: `server-${result.serverId}`,
         type: 'server',
-        serverId: serverId,
+        serverId: result.serverId,
         title: bookmark.name,
         unreadCount: 0,
       });
@@ -288,6 +295,25 @@ export default function BookmarkList({ bookmarks, searchQuery = '' }: BookmarkLi
     
     console.log('Connecting to server from tracker:', bookmark.name, bookmark.address, bookmark.port);
     await handleConnect(bookmark);
+  };
+
+  const handleAddTrackerServerToBookmarks = (_trackerId: string, server: ServerBookmark) => {
+    // Check if a bookmark with this address already exists
+    const existing = bookmarks.find(b => b.address === server.address && b.port === server.port && b.type !== 'tracker');
+    if (existing) {
+      console.log('Bookmark already exists for', server.address);
+      return;
+    }
+
+    // Show the add bookmark dialog pre-populated with server info
+    setAddingBookmark({
+      id: crypto.randomUUID(),
+      name: server.name,
+      address: server.address,
+      port: server.port,
+      login: 'guest',
+      type: 'server',
+    });
   };
 
   // Filter helper functions
@@ -529,21 +555,47 @@ export default function BookmarkList({ bookmarks, searchQuery = '' }: BookmarkLi
                   {/* Tracker servers list (when expanded) - indented 34px */}
                   {isExpanded && servers.map((server, serverIndex) => {
                     const serverIsEven = (index + serverIndex + 1) % 2 === 0;
+                    const trackerServerId = `${bookmark.id}-${server.id}`;
                     return (
                       <div
                         key={server.id}
                         className={`h-[34px] pl-[34px] pr-2 flex items-center gap-1.5 cursor-pointer group min-w-0 ${
-                          serverIsEven 
-                            ? 'bg-white dark:bg-gray-900' 
+                          serverIsEven
+                            ? 'bg-white dark:bg-gray-900'
                             : 'bg-gray-50 dark:bg-gray-800/50'
                         } hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors`}
                         onClick={() => handleConnectToTrackerServer(bookmark.id, server)}
+                        onContextMenu={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          const items: ContextMenuItem[] = [
+                            {
+                              label: 'Connect',
+                              icon: '🔗',
+                              action: () => handleConnectToTrackerServer(bookmark.id, server),
+                            },
+                            {
+                              label: 'Add to Bookmarks',
+                              icon: '🔖',
+                              action: () => handleAddTrackerServerToBookmarks(bookmark.id, server),
+                            },
+                            { divider: true, label: '', action: () => {} },
+                            {
+                              label: 'Copy Address',
+                              icon: '📋',
+                              action: () => {
+                                navigator.clipboard.writeText(`${server.address}:${server.port}`);
+                              },
+                            },
+                          ];
+                          showContextMenu(e, items);
+                        }}
                       >
                         {/* Server icon - 16x16 */}
                         <div className="w-4 h-4 flex-shrink-0 flex items-center justify-center">
-                          <img 
-                            src="/icons/server.png" 
-                            alt="Server" 
+                          <img
+                            src="/icons/server.png"
+                            alt="Server"
                             className="w-4 h-4"
                             onError={(e) => {
                               // Fallback to SVG if image not found
@@ -558,22 +610,22 @@ export default function BookmarkList({ bookmarks, searchQuery = '' }: BookmarkLi
                             }}
                           />
                         </div>
-                        
+
                         {/* Server name - truncates naturally, no max width */}
                         <span className="text-sm text-gray-900 dark:text-white truncate min-w-0 flex-shrink">
                           {server.name}
                         </span>
-                        
+
                         {/* Server description if available - truncates naturally, no max width */}
                         {server.description && (
                           <span className="text-xs text-gray-500 dark:text-gray-400 truncate min-w-0 flex-shrink">
                             {server.description}
                           </span>
                         )}
-                        
+
                         {/* Spacer to push user count to the right */}
                         <div className="flex-1 min-w-0"></div>
-                        
+
                         {/* User count with animated dot */}
                         {server.users > 0 && (
                           <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 flex-shrink-0">
@@ -581,6 +633,31 @@ export default function BookmarkList({ bookmarks, searchQuery = '' }: BookmarkLi
                             <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
                           </div>
                         )}
+
+                        {/* Hover action buttons */}
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleAddTrackerServerToBookmarks(bookmark.id, server);
+                            }}
+                            className="text-gray-600 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 text-xs px-1.5 py-0.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+                            title="Add to bookmarks"
+                          >
+                            Bookmark
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleConnectToTrackerServer(bookmark.id, server);
+                            }}
+                            disabled={connectingId === trackerServerId}
+                            className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 text-xs px-2 py-0.5 rounded bg-blue-50 dark:bg-blue-900/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Connect to server"
+                          >
+                            {connectingId === trackerServerId ? 'Connecting...' : 'Connect'}
+                          </button>
+                        </div>
                       </div>
                     );
                   })}
@@ -696,7 +773,14 @@ export default function BookmarkList({ bookmarks, searchQuery = '' }: BookmarkLi
                   <span className="text-sm text-gray-900 dark:text-white flex-1 truncate min-w-0">
                     {bookmark.name}
                   </span>
-                  
+                  {bookmark.tls && (
+                    <span title="TLS Enabled">
+                      <svg className="w-3 h-3 text-green-600 dark:text-green-400 flex-shrink-0" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M8 1a3.5 3.5 0 0 0-3.5 3.5V7H3.5A1.5 1.5 0 0 0 2 8.5v5A1.5 1.5 0 0 0 3.5 15h9a1.5 1.5 0 0 0 1.5-1.5v-5A1.5 1.5 0 0 0 12.5 7h-1V4.5A3.5 3.5 0 0 0 8 1zm2 6H6V4.5a2 2 0 1 1 4 0V7z"/>
+                      </svg>
+                    </span>
+                  )}
+
                   {/* Edit/Delete/Connect buttons on hover */}
                   <div 
                     className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
@@ -780,6 +864,15 @@ export default function BookmarkList({ bookmarks, searchQuery = '' }: BookmarkLi
         <EditBookmarkDialog
           bookmark={editingBookmark}
           onClose={() => setEditingBookmark(null)}
+        />
+      )}
+
+      {/* Add bookmark dialog */}
+      {addingBookmark && (
+        <EditBookmarkDialog
+          bookmark={addingBookmark}
+          mode="add"
+          onClose={() => setAddingBookmark(null)}
         />
       )}
 

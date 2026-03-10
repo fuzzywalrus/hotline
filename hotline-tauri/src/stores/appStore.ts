@@ -6,6 +6,7 @@ interface ServerInfo {
   name: string;
   address: string;
   port: number;
+  tls?: boolean;
 }
 
 interface FileItem {

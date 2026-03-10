@@ -11,6 +11,7 @@ export interface Bookmark {
   password?: string;
   icon?: number;
   autoConnect?: boolean;
+  tls?: boolean;
   type?: BookmarkType; // 'server' by default, 'tracker' for tracker servers
 }
 

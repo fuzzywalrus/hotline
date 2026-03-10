@@ -12,6 +12,7 @@ pub const TRANSACTION_HEADER_SIZE: usize = 20;
 
 // Default ports
 pub const DEFAULT_SERVER_PORT: u16 = 5500;
+pub const DEFAULT_TLS_PORT: u16 = 5600;
 pub const DEFAULT_TRACKER_PORT: u16 = 5498;
 
 // Transaction types

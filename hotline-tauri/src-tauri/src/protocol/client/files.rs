@@ -1,6 +1,6 @@
 // File management functionality for Hotline client
 
-use super::{FileInfo, HotlineClient};
+use super::{BoxedRead, BoxedWrite, FileInfo, HotlineClient};
 use crate::protocol::constants::{FieldType, TransactionType, FILE_TRANSFER_ID};
 use crate::protocol::transaction::{Transaction, TransactionField};
 use std::time::Duration;
@@ -52,6 +52,27 @@ fn encode_file_path(path: &[String]) -> Option<Vec<u8>> {
 }
 
 impl HotlineClient {
+    /// Create a transfer connection (plain TCP or TLS) to the file transfer port.
+    /// File transfers use main port + 1.
+    async fn create_transfer_stream(&self) -> Result<(BoxedRead, BoxedWrite), String> {
+        let transfer_port = self.bookmark.port + 1;
+        let addr = format!("{}:{}", self.bookmark.address, transfer_port);
+        println!("Connecting to file transfer port: {}", transfer_port);
+
+        let tcp_stream = TcpStream::connect(&addr)
+            .await
+            .map_err(|e| format!("Failed to connect for file transfer: {}", e))?;
+
+        if self.bookmark.tls {
+            let tls_stream = Self::wrap_tls(tcp_stream, &self.bookmark.address).await?;
+            let (read_half, write_half) = tokio::io::split(tls_stream);
+            Ok((Box::new(read_half), Box::new(write_half)))
+        } else {
+            let (read_half, write_half) = tcp_stream.into_split();
+            Ok((Box::new(read_half), Box::new(write_half)))
+        }
+    }
+
     pub async fn get_file_list(&self, path: Vec<String>) -> Result<(), String> {
         println!("Requesting file list for path: {:?}", path);
 
@@ -215,15 +236,8 @@ impl HotlineClient {
     {
         println!("Starting file transfer with reference number: {}", reference_number);
 
-        // Open a new TCP connection to the server for file transfer
-        // File transfers use port+1 (e.g., 5501 for main port 5500)
-        let transfer_port = self.bookmark.port + 1;
-        let addr = format!("{}:{}", self.bookmark.address, transfer_port);
-        println!("Connecting to file transfer port: {}", transfer_port);
-
-        let mut transfer_stream = TcpStream::connect(&addr)
-            .await
-            .map_err(|e| format!("Failed to connect for file transfer: {}", e))?;
+        // Open a new connection (TCP or TLS) to the server for file transfer
+        let (mut transfer_read, mut transfer_write) = self.create_transfer_stream().await?;
 
         println!("File transfer connection established");
 
@@ -236,12 +250,12 @@ impl HotlineClient {
         handshake.extend_from_slice(&0u32.to_be_bytes());
 
         println!("Sending file transfer handshake ({} bytes): {:02X?}", handshake.len(), &handshake);
-        transfer_stream
+        transfer_write
             .write_all(&handshake)
             .await
             .map_err(|e| format!("Failed to send file transfer handshake: {}", e))?;
 
-        transfer_stream
+        transfer_write
             .flush()
             .await
             .map_err(|e| format!("Failed to flush handshake: {}", e))?;
@@ -253,7 +267,7 @@ impl HotlineClient {
         println!("Attempting to peek at server response...");
         let bytes_read = match tokio::time::timeout(
             Duration::from_secs(5),
-            transfer_stream.read(&mut peek_buffer)
+            transfer_read.read(&mut peek_buffer)
         ).await {
             Ok(Ok(n)) => {
                 println!("Server sent {} bytes: {:02X?}", n, &peek_buffer[..n]);
@@ -277,7 +291,7 @@ impl HotlineClient {
         response_header[..bytes_read].copy_from_slice(&peek_buffer[..bytes_read]);
 
         if bytes_read < 24 {
-            transfer_stream
+            transfer_read
                 .read_exact(&mut response_header[bytes_read..])
                 .await
                 .map_err(|e| format!("Failed to read rest of file transfer header: {}", e))?;
@@ -310,7 +324,7 @@ impl HotlineClient {
             // Reserved (4 bytes)
             // Data size (4 bytes)
             let mut fork_header = [0u8; 16];
-            transfer_stream
+            transfer_read
                 .read_exact(&mut fork_header)
                 .await
                 .map_err(|e| format!("Failed to read fork {} header: {}", fork_idx, e))?;
@@ -387,7 +401,7 @@ impl HotlineClient {
                         loop {
                             let mut chunk = vec![0u8; chunk_size];
                             
-                            match transfer_stream.read(&mut chunk).await {
+                            match transfer_read.read(&mut chunk).await {
                                 Ok(0) => {
                                     // EOF reached
                                     println!("EOF reached after reading {} bytes", bytes_read);
@@ -424,7 +438,7 @@ impl HotlineClient {
                             let mut chunk = vec![0u8; to_read];
 
                             // Use read_exact with better error handling for large files
-                            match transfer_stream.read_exact(&mut chunk).await {
+                            match transfer_read.read_exact(&mut chunk).await {
                                 Ok(_) => {
                                     bytes_read += to_read as u32;
                                     fork_data.extend_from_slice(&chunk);
@@ -457,7 +471,7 @@ impl HotlineClient {
                 } else {
                     // For INFO/MACR forks, read all at once
                     let mut fork_data = vec![0u8; actual_size as usize];
-                    transfer_stream
+                    transfer_read
                         .read_exact(&mut fork_data)
                         .await
                         .map_err(|e| format!("Failed to read fork {} data: {}", fork_idx, e))?;
@@ -586,14 +600,8 @@ impl HotlineClient {
     pub async fn download_banner_raw(&self, reference_number: u32, transfer_size: u32) -> Result<Vec<u8>, String> {
         println!("Starting banner download (raw data) with reference: {}, size: {} bytes", reference_number, transfer_size);
 
-        // Open a new TCP connection to the server for file transfer
-        let transfer_port = self.bookmark.port + 1;
-        let addr = format!("{}:{}", self.bookmark.address, transfer_port);
-        println!("Connecting to file transfer port: {}", transfer_port);
-
-        let mut transfer_stream = TcpStream::connect(&addr)
-            .await
-            .map_err(|e| format!("Failed to connect for banner transfer: {}", e))?;
+        // Open a new connection (TCP or TLS) for file transfer
+        let (mut transfer_read, mut transfer_write) = self.create_transfer_stream().await?;
 
         println!("Banner transfer connection established");
 
@@ -605,12 +613,12 @@ impl HotlineClient {
         handshake.extend_from_slice(&0u32.to_be_bytes());
 
         println!("Sending banner transfer handshake ({} bytes): {:02X?}", handshake.len(), &handshake);
-        transfer_stream
+        transfer_write
             .write_all(&handshake)
             .await
             .map_err(|e| format!("Failed to send banner handshake: {}", e))?;
 
-        transfer_stream
+        transfer_write
             .flush()
             .await
             .map_err(|e| format!("Failed to flush handshake: {}", e))?;
@@ -628,7 +636,7 @@ impl HotlineClient {
             let to_read = std::cmp::min(remaining, chunk_size) as usize;
             let mut chunk = vec![0u8; to_read];
 
-            transfer_stream
+            transfer_read
                 .read_exact(&mut chunk)
                 .await
                 .map_err(|e| format!("Failed to read banner data: {}", e))?;
@@ -812,14 +820,8 @@ impl HotlineClient {
     {
         println!("Starting file upload transfer: {} ({} bytes)", file_name, file_data.len());
 
-        // Open a new TCP connection to the server for file transfer
-        let transfer_port = self.bookmark.port + 1;
-        let addr = format!("{}:{}", self.bookmark.address, transfer_port);
-        println!("Connecting to file transfer port: {}", transfer_port);
-
-        let mut transfer_stream = TcpStream::connect(&addr)
-            .await
-            .map_err(|e| format!("Failed to connect for upload transfer: {}", e))?;
+        // Open a new connection (TCP or TLS) for file transfer
+        let (_transfer_read, mut transfer_write) = self.create_transfer_stream().await?;
 
         println!("Upload transfer connection established");
 
@@ -838,12 +840,12 @@ impl HotlineClient {
         handshake.extend_from_slice(&0u32.to_be_bytes());
 
         println!("Sending upload handshake ({} bytes): {:02X?}", handshake.len(), &handshake);
-        transfer_stream
+        transfer_write
             .write_all(&handshake)
             .await
             .map_err(|e| format!("Failed to send upload handshake: {}", e))?;
 
-        transfer_stream
+        transfer_write
             .flush()
             .await
             .map_err(|e| format!("Failed to flush handshake: {}", e))?;
@@ -858,7 +860,7 @@ impl HotlineClient {
         filp_header.extend_from_slice(&[0u8; 16]); // Reserved
         filp_header.extend_from_slice(&2u16.to_be_bytes()); // Fork count (INFO + DATA)
 
-        transfer_stream
+        transfer_write
             .write_all(&filp_header)
             .await
             .map_err(|e| format!("Failed to send FILP header: {}", e))?;
@@ -871,7 +873,7 @@ impl HotlineClient {
         info_fork_header.extend_from_slice(&0u32.to_be_bytes()); // Reserved
         info_fork_header.extend_from_slice(&info_fork_size.to_be_bytes()); // Data size
 
-        transfer_stream
+        transfer_write
             .write_all(&info_fork_header)
             .await
             .map_err(|e| format!("Failed to send INFO fork header: {}", e))?;
@@ -886,7 +888,7 @@ impl HotlineClient {
         data_fork_header.extend_from_slice(&0u32.to_be_bytes()); // Reserved
         data_fork_header.extend_from_slice(&data_fork_size.to_be_bytes()); // Data size
 
-        transfer_stream
+        transfer_write
             .write_all(&data_fork_header)
             .await
             .map_err(|e| format!("Failed to send DATA fork header: {}", e))?;
@@ -901,7 +903,7 @@ impl HotlineClient {
             let to_send = std::cmp::min(remaining, chunk_size) as usize;
             let chunk = &file_data[bytes_sent as usize..(bytes_sent as usize + to_send)];
 
-            transfer_stream
+            transfer_write
                 .write_all(chunk)
                 .await
                 .map_err(|e| format!("Failed to send file data: {}", e))?;
@@ -916,7 +918,7 @@ impl HotlineClient {
             }
         }
 
-        transfer_stream
+        transfer_write
             .flush()
             .await
             .map_err(|e| format!("Failed to flush file data: {}", e))?;

@@ -31,6 +31,10 @@ interface PreferencesState {
   addWatchWord: (word: string) => void;
   removeWatchWord: (word: string) => void;
 
+  // Connection preferences
+  autoDetectTls: boolean;
+  setAutoDetectTls: (enabled: boolean) => void;
+
   // Sound preferences
   playSounds: boolean;
   playChatSound: boolean;
@@ -97,6 +101,10 @@ export const usePreferencesStore = create<PreferencesState>()(
       removeWatchWord: (word) => set((state) => ({
         watchWords: state.watchWords.filter((w) => w !== word),
       })),
+
+      // Connection preferences
+      autoDetectTls: false,
+      setAutoDetectTls: (autoDetectTls) => set({ autoDetectTls }),
 
       // Sound preferences (all enabled by default)
       playSounds: true,

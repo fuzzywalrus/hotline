@@ -8,11 +8,9 @@ A modern, cross-platform Hotline client built with **Tauri**, React, and Rust. T
 This port is divergent from the original Swift/macOS Hotline client and is not a direct port, rather a recreation of it in Tauri using React and Rust, the source code providing valuable information about the protocol and how to implement it. 
 
 
-
-
 ## Platform Support
 
-Right now the iOS and iPadOS versions are not in the app store and must be built manually.  The supported platforms are as follows:
+Right now the iOS and iPadOS versions are not in the app store and must be built manually.  They work on said platforms!
 
 | Platform | Architecture | Status |
 |----------|--------------|--------|

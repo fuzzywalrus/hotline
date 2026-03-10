@@ -296,7 +296,8 @@ export function useServerHandlers({
     newsPath: string[],
     composerTitle: string,
     composerBody: string,
-    postingNews: boolean
+    postingNews: boolean,
+    parentId: number = 0,
   ) => {
     e.preventDefault();
     if (!composerTitle.trim() || !composerBody.trim() || postingNews) return;
@@ -307,7 +308,8 @@ export function useServerHandlers({
         serverId,
         path: newsPath,
         title: composerTitle.trim(),
-        body: composerBody.trim(),
+        text: composerBody.trim(),
+        parentId,
       });
 
       setComposerTitle('');

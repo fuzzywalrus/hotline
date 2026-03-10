@@ -31,6 +31,7 @@ This project complements the [original Swift client](https://github.com/mierau/h
 - ✅ **News**: Browse categories, read articles, post news and replies
 - ✅ **File Management**: Browse, download, upload files with progress tracking
 - ✅ **File Preview**: Preview images, audio, and text files before downloading
+- ✅ **TLS Support**: Secure encrypted connections to TLS-enabled servers (e.g. Mobius on port 5600), with per-bookmark TLS toggle and auto-detect from tracker listings
 - ✅ **Settings**: Username and icon customization with persistent storage
 - ✅ **Server Banners**: Automatic banner download and display
 - ✅ **Server Agreements**: Agreement acceptance flow
@@ -40,6 +41,26 @@ This project complements the [original Swift client](https://github.com/mierau/h
 - ✅ **Context Menus**: Right-click actions throughout the app
 - ✅ **Dark Mode**: Full dark mode support
 - ✅ **Transfer List**: Track active and completed file transfers
+
+### TLS (Encrypted Connections)
+
+Hotline Navigator supports TLS connections to servers that offer encryption (such as [Mobius](https://github.com/jhalter/mobius) v0.20+). TLS wraps the TCP connection before the Hotline protocol handshake, protecting credentials and data in transit.
+
+**Per-bookmark TLS:** Each bookmark has a "Use TLS" toggle. When enabled, the client connects on the specified port (typically 5600) using TLS. Toggling TLS on/off in the Connect or Edit Bookmark dialogs automatically switches between port 5600 and 5500.
+
+**Auto-Detect TLS:** An opt-in setting (Settings > General > Auto-Detect TLS) that automatically tries a TLS connection when connecting from tracker listings. When enabled, the client attempts to connect on port+100 with TLS first; if TLS fails or times out (5 seconds), it falls back to a plain connection on the original port. This works transparently — no user action needed beyond enabling the setting.
+
+**Implementation guide for client authors:**
+
+Hotline TLS follows the convention established by [Mobius](https://github.com/jhalter/mobius): TLS is served on a port 100 higher than the plain Hotline port (e.g. plain on 5500, TLS on 5600). TLS wraps the raw TCP socket *before* the Hotline protocol handshake — the protocol bytes on the wire are identical, just encrypted. File transfers follow the same pattern (transfer port = server port + 1, so TLS transfers on 5601).
+
+To implement auto-detect TLS in your own client:
+
+1. **Try TLS first, fall back to plain.** Attempt a full TLS connection on port+100 with a reasonable timeout (we use 5 seconds). If it succeeds, you're done. If it fails or times out, connect on the original port without TLS.
+2. **Do not probe separately.** An earlier approach of opening a TCP connection to check if the TLS port was open, then closing it and opening a second connection for the real TLS handshake, caused the server to reject the second connection. Hotline servers (particularly Mobius) appear to treat the aborted probe as a bad client and temporarily refuse connections from the same IP. The correct approach is a single connection attempt — try TLS, and if it fails, try plain.
+3. **SNI with IP addresses.** Go's `crypto/tls` server rejects the TLS IP Address SNI extension (`ServerName::IpAddress`). When connecting by IP rather than hostname, either omit the SNI extension entirely or send a dummy DNS hostname (we use `"hotline"`). Since Hotline servers use self-signed certificates, the SNI value only affects certificate selection, not validation — any value (or none) works.
+4. **Certificate verification.** Hotline servers use self-signed certificates, so TLS clients must either skip verification or implement a trust-on-first-use model. We skip verification entirely (`InsecureSkipVerify` equivalent).
+5. **Per-bookmark persistence.** Store whether a bookmark uses TLS so users don't pay the auto-detect timeout cost on every connection. Auto-detect is best suited for tracker listings where TLS capability isn't known in advance.
 
 ### Roadmap
 - [ ] Account management and permissions

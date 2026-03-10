@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useAppStore } from '../../stores/appStore';
 import type { Bookmark } from '../../types';
@@ -6,47 +6,77 @@ import type { Bookmark } from '../../types';
 interface EditBookmarkDialogProps {
   bookmark: Bookmark;
   onClose: () => void;
+  mode?: 'edit' | 'add';
+  onSave?: (bookmark: Bookmark) => void;
 }
 
-export default function EditBookmarkDialog({ bookmark, onClose }: EditBookmarkDialogProps) {
-  const { updateBookmark } = useAppStore();
+export default function EditBookmarkDialog({ bookmark, onClose, mode = 'edit', onSave }: EditBookmarkDialogProps) {
+  const { updateBookmark, addBookmark } = useAppStore();
+  const [visible, setVisible] = useState(false);
   const [formData, setFormData] = useState({
     name: bookmark.name,
     address: bookmark.address,
     port: bookmark.port.toString(),
-    login: bookmark.login,
+    login: bookmark.login || 'guest',
     password: bookmark.password || '',
+    tls: bookmark.tls || false,
   });
+
+  useEffect(() => {
+    requestAnimationFrame(() => setVisible(true));
+  }, []);
+
+  const handleClose = () => {
+    setVisible(false);
+    setTimeout(onClose, 300);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const updatedBookmark: Bookmark = {
-      ...bookmark, // Preserve all fields including 'type'
+    const finalBookmark: Bookmark = {
+      ...bookmark,
       name: formData.name || `${formData.address}:${formData.port}`,
       address: formData.address,
       port: parseInt(formData.port),
       login: formData.login,
       password: formData.password || undefined,
-      // Explicitly preserve the type field
+      tls: formData.tls,
       type: bookmark.type,
     };
 
     try {
-      await invoke('save_bookmark', { bookmark: updatedBookmark });
-      updateBookmark(bookmark.id, updatedBookmark);
-      onClose();
+      await invoke('save_bookmark', { bookmark: finalBookmark });
+      if (mode === 'add') {
+        addBookmark(finalBookmark);
+        onSave?.(finalBookmark);
+      } else {
+        updateBookmark(bookmark.id, finalBookmark);
+      }
+      handleClose();
     } catch (error) {
-      console.error('Failed to update bookmark:', error);
+      console.error(`Failed to ${mode} bookmark:`, error);
     }
   };
 
+  const isAdd = mode === 'add';
+
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md mx-4">
+    <div
+      onClick={handleClose}
+      className={`fixed inset-0 flex items-center justify-center z-50 transition-all duration-300 ease-in-out ${
+        visible ? 'bg-black/60 backdrop-blur-sm' : 'bg-black/0 backdrop-blur-none'
+      }`}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className={`bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md mx-4 transition-all duration-300 ease-in-out ${
+          visible ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-95 translate-y-2'
+        }`}
+      >
         <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Edit Bookmark
+            {isAdd ? 'Add Bookmark' : 'Edit Bookmark'}
           </h2>
         </div>
 
@@ -90,6 +120,27 @@ export default function EditBookmarkDialog({ bookmark, onClose }: EditBookmarkDi
             />
           </div>
 
+          {bookmark.type !== 'tracker' && (
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id={`${mode}-tls`}
+                checked={formData.tls}
+                onChange={(e) => {
+                  const newTls = e.target.checked;
+                  const newPort = newTls && formData.port === '5500' ? '5600'
+                    : !newTls && formData.port === '5600' ? '5500'
+                    : formData.port;
+                  setFormData({ ...formData, tls: newTls, port: newPort });
+                }}
+                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+              />
+              <label htmlFor={`${mode}-tls`} className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Use TLS (Secure Connection)
+              </label>
+            </div>
+          )}
+
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Login
@@ -118,7 +169,7 @@ export default function EditBookmarkDialog({ bookmark, onClose }: EditBookmarkDi
           <div className="flex gap-3 pt-4">
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
             >
               Cancel
@@ -127,7 +178,7 @@ export default function EditBookmarkDialog({ bookmark, onClose }: EditBookmarkDi
               type="submit"
               className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors"
             >
-              Save Changes
+              {isAdd ? 'Add Bookmark' : 'Save Changes'}
             </button>
           </div>
         </form>

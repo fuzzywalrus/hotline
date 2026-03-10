@@ -12,14 +12,66 @@ use super::constants::{
 use super::transaction::{Transaction, TransactionField};
 use super::types::{Bookmark, ConnectionStatus, ServerInfo};
 use std::collections::HashMap;
+use std::net::IpAddr;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::sync::{mpsc, Mutex, RwLock};
 use tokio::task::JoinHandle;
+
+// TLS support
+use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
+use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
+use rustls::DigitallySignedStruct;
+use tokio_rustls::TlsConnector;
+
+// Trait object type aliases for stream halves (supports both plain TCP and TLS)
+pub(crate) type BoxedRead = Box<dyn AsyncRead + Unpin + Send>;
+pub(crate) type BoxedWrite = Box<dyn AsyncWrite + Unpin + Send>;
+
+/// Certificate verifier that accepts any certificate.
+/// Hotline servers typically use self-signed certificates.
+#[derive(Debug)]
+struct NoVerifier;
+
+impl ServerCertVerifier for NoVerifier {
+    fn verify_server_cert(
+        &self,
+        _end_entity: &CertificateDer<'_>,
+        _intermediates: &[CertificateDer<'_>],
+        _server_name: &ServerName<'_>,
+        _ocsp_response: &[u8],
+        _now: UnixTime,
+    ) -> Result<ServerCertVerified, rustls::Error> {
+        Ok(ServerCertVerified::assertion())
+    }
+
+    fn verify_tls12_signature(
+        &self,
+        _message: &[u8],
+        _cert: &CertificateDer<'_>,
+        _dss: &DigitallySignedStruct,
+    ) -> Result<HandshakeSignatureValid, rustls::Error> {
+        Ok(HandshakeSignatureValid::assertion())
+    }
+
+    fn verify_tls13_signature(
+        &self,
+        _message: &[u8],
+        _cert: &CertificateDer<'_>,
+        _dss: &DigitallySignedStruct,
+    ) -> Result<HandshakeSignatureValid, rustls::Error> {
+        Ok(HandshakeSignatureValid::assertion())
+    }
+
+    fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
+        rustls::crypto::ring::default_provider()
+            .signature_verification_algorithms
+            .supported_schemes()
+    }
+}
 
 // Event types that can be received from the server
 #[derive(Debug, Clone)]
@@ -50,8 +102,8 @@ pub struct HotlineClient {
     username: Arc<Mutex<String>>,
     user_icon_id: Arc<Mutex<u16>>,
     status: Arc<Mutex<ConnectionStatus>>,
-    read_half: Arc<Mutex<Option<OwnedReadHalf>>>,
-    write_half: Arc<Mutex<Option<OwnedWriteHalf>>>,
+    read_half: Arc<Mutex<Option<BoxedRead>>>,
+    write_half: Arc<Mutex<Option<BoxedWrite>>>,
     transaction_counter: Arc<AtomicU32>,
     running: Arc<AtomicBool>,
 
@@ -110,7 +162,8 @@ impl HotlineClient {
     }
 
     pub async fn connect(&self) -> Result<(), String> {
-        println!("Connecting to {}:{}...", self.bookmark.address, self.bookmark.port);
+        let tls_label = if self.bookmark.tls { " (TLS)" } else { "" };
+        println!("Connecting to {}:{}{tls_label}...", self.bookmark.address, self.bookmark.port);
 
         // Update status
         {
@@ -125,17 +178,16 @@ impl HotlineClient {
             .await
             .map_err(|e| format!("Failed to connect: {}", e))?;
 
-        // Split stream into read and write halves for concurrent access
-        let (read_half, write_half) = stream.into_split();
-
-        // Store halves
-        {
-            let mut read_guard = self.read_half.lock().await;
-            *read_guard = Some(read_half);
-        }
-        {
-            let mut write_guard = self.write_half.lock().await;
-            *write_guard = Some(write_half);
+        // Split into read/write halves, optionally wrapping with TLS
+        if self.bookmark.tls {
+            let tls_stream = Self::wrap_tls(stream, &self.bookmark.address).await?;
+            let (read_half, write_half) = tokio::io::split(tls_stream);
+            *self.read_half.lock().await = Some(Box::new(read_half));
+            *self.write_half.lock().await = Some(Box::new(write_half));
+        } else {
+            let (read_half, write_half) = stream.into_split();
+            *self.read_half.lock().await = Some(Box::new(read_half));
+            *self.write_half.lock().await = Some(Box::new(write_half));
         }
 
         // Update status
@@ -161,6 +213,38 @@ impl HotlineClient {
         println!("Successfully connected and logged in!");
 
         Ok(())
+    }
+
+    /// Wrap a TCP stream with TLS, accepting any certificate (for self-signed Hotline servers).
+    pub(crate) async fn wrap_tls(
+        stream: TcpStream,
+        host: &str,
+    ) -> Result<tokio_rustls::client::TlsStream<TcpStream>, String> {
+        // Install the ring crypto provider (required by rustls)
+        let _ = rustls::crypto::ring::default_provider().install_default();
+
+        let config = rustls::ClientConfig::builder()
+            .dangerous()
+            .with_custom_certificate_verifier(Arc::new(NoVerifier))
+            .with_no_client_auth();
+
+        let connector = TlsConnector::from(Arc::new(config));
+
+        // Build ServerName for SNI.
+        // Important: Go's TLS server rejects IP-address SNI extensions, so when
+        // connecting by IP we use a dummy DNS name. Since we skip cert verification
+        // (NoVerifier), the SNI name only affects the server's certificate selection,
+        // not validation.
+        let server_name = if host.parse::<IpAddr>().is_ok() {
+            // IP address — use a dummy DNS name to avoid Go's TLS rejecting IP-based SNI
+            ServerName::try_from("hotline".to_string()).unwrap()
+        } else {
+            ServerName::try_from(host.to_string())
+                .unwrap_or_else(|_| ServerName::try_from("hotline".to_string()).unwrap())
+        };
+
+        connector.connect(server_name, stream).await
+            .map_err(|e| format!("TLS handshake failed: {}", e))
     }
 
     async fn handshake(&self) -> Result<(), String> {

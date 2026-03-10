@@ -34,15 +34,24 @@ struct GitHubAsset {
     name: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectResult {
+    pub server_id: String,
+    pub tls: bool,
+    pub port: u16,
+}
+
 #[tauri::command]
 pub async fn connect_to_server(
     bookmark: Bookmark,
     username: String,
     user_icon_id: u16,
+    auto_detect_tls: Option<bool>,
     state: State<'_, AppState>,
-) -> Result<String, String> {
+) -> Result<ConnectResult, String> {
     println!("Command: connect_to_server to {}:{} as {}", bookmark.address, bookmark.port, username);
-    state.connect_server(bookmark, username, user_icon_id).await
+    state.connect_server(bookmark, username, user_icon_id, auto_detect_tls.unwrap_or(false)).await
 }
 
 #[tauri::command]
@@ -568,6 +577,7 @@ pub async fn test_connection(address: String, port: u16) -> Result<String, Strin
         password: Some("".to_string()),
         icon: Some(414),
         auto_connect: false,
+        tls: false,
         bookmark_type: None,
     };
 

@@ -6,6 +6,7 @@ interface ServerHeaderProps {
   serverInfo: ServerInfo | null;
   users: User[];
   connectionStatus: ConnectionStatus;
+  isTls?: boolean;
   onDisconnect: () => void;
   onShowTransfers?: () => void;
   onShowNotificationLog?: () => void;
@@ -16,6 +17,7 @@ export default function ServerHeader({
   serverInfo,
   users,
   connectionStatus,
+  isTls,
   onDisconnect,
   onShowTransfers,
   onShowNotificationLog,
@@ -43,6 +45,13 @@ export default function ServerHeader({
               connectionStatus === 'failed' ? 'bg-red-500' :
               'bg-gray-400'
             }`} title={connectionStatus} />
+            {isTls && (
+              <span title="TLS Secure Connection">
+                <svg className="w-3.5 h-3.5 text-green-600 dark:text-green-400" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M8 1a3.5 3.5 0 0 0-3.5 3.5V7H3.5A1.5 1.5 0 0 0 2 8.5v5A1.5 1.5 0 0 0 3.5 15h9a1.5 1.5 0 0 0 1.5-1.5v-5A1.5 1.5 0 0 0 12.5 7h-1V4.5A3.5 3.5 0 0 0 8 1zm2 6H6V4.5a2 2 0 1 1 4 0V7z"/>
+                </svg>
+              </span>
+            )}
             <span className="hidden md:inline text-xs text-gray-500 dark:text-gray-400 capitalize">
               {connectionStatus === 'logged-in' ? 'Logged in' :
                connectionStatus === 'logging-in' ? 'Logging in...' :
