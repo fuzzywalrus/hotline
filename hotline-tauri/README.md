@@ -78,6 +78,12 @@ To implement auto-detect TLS in your own client:
 - **Rust** (stable channel)
 - **Tauri v2** — [Platform-specific requirements](https://v2.tauri.app/start/prerequisites/)
 
+**Linux (Debian/Ubuntu)** — install system libraries before building:
+```bash
+sudo apt-get update
+sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libgtk-3-dev
+```
+
 ### Development
 
 1. **Clone the repository** (this client lives in the `hotline-tauri` directory of the main repo)
