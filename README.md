@@ -19,7 +19,7 @@ I made a video aobut the [the history of Hotline](https://www.youtube.com/watch?
 
 ## Platform Support
 
-Right now the iOS and iPadOS versions are not in the app store and must be built manually.  They work on said platforms!
+Right now the iOS and iPadOS versions are not in the app store and must be built manually. Android support is planned.
 
 | Platform | Architecture | Status |
 |----------|--------------|--------|
@@ -48,5 +48,5 @@ For more details about the Tauri client implementation, see the [`hotline-tauri/
 ## More Info about Hotline
 
 
-Looking for other Hotline Client? see [The Hotline Wiki](https://hlwiki.com/index.php/Clients_New)
+Looking for other Hotline Client? see [The Hotline Wiki](https://hlwiki.com/index.php?title=Clients) and [Hotline City](https://hotline.retro-os.live/index.php/downloads/category/9-hotline-clients)
 
