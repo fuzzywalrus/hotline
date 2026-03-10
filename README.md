@@ -19,7 +19,7 @@ I made a video aobut the [the history of Hotline](https://www.youtube.com/watch?
 
 ## Platform Support
 
-Right now the iOS and iPadOS versions are not in the app store and must be built manually.  They work on said platforms!
+Right now the iOS and iPadOS versions are not in the app store and must be built manually. Android support is planned.
 
 | Platform | Architecture | Status |
 |----------|--------------|--------|
