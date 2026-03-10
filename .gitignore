@@ -27,3 +27,9 @@ IDEWorkspaceSharedSettings.plist
 
 .env
 .claude/
+
+# Android
+*.apk
+*.aab
+*.keystore
+*.jks
