@@ -172,8 +172,8 @@ impl HotlineClient {
             let _ = self.event_tx.send(HotlineEvent::StatusChanged(ConnectionStatus::Connecting));
         }
 
-        // Connect TCP
-        let addr = format!("{}:{}", self.bookmark.address, self.bookmark.port);
+        // Connect TCP (IPv6 literals use [addr]:port format)
+        let addr = crate::protocol::socket_addr_string(&self.bookmark.address, self.bookmark.port);
         let stream = TcpStream::connect(&addr)
             .await
             .map_err(|e| format!("Failed to connect: {}", e))?;

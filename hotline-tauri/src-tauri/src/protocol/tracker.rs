@@ -30,7 +30,7 @@ impl TrackerClient {
     ///      - Server description: Pascal string (1-byte length + data, MacOS Roman encoding)
     pub async fn fetch_servers(address: &str, port: Option<u16>) -> Result<Vec<TrackerServer>, String> {
         let tracker_port = port.unwrap_or(DEFAULT_TRACKER_PORT);
-        let addr = format!("{}:{}", address, tracker_port);
+        let addr = crate::protocol::socket_addr_string(address, tracker_port);
         
         println!("TrackerClient: Connecting to tracker {}:{}", address, tracker_port);
         

@@ -56,7 +56,7 @@ impl HotlineClient {
     /// File transfers use main port + 1.
     async fn create_transfer_stream(&self) -> Result<(BoxedRead, BoxedWrite), String> {
         let transfer_port = self.bookmark.port + 1;
-        let addr = format!("{}:{}", self.bookmark.address, transfer_port);
+        let addr = crate::protocol::socket_addr_string(&self.bookmark.address, transfer_port);
         println!("Connecting to file transfer port: {}", transfer_port);
 
         let tcp_stream = TcpStream::connect(&addr)

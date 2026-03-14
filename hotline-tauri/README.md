@@ -287,6 +287,18 @@ hotline-tauri/
 - Conditional platform features (keyboard shortcuts adapt to OS)
 - Responsive layout that works on different screen sizes
 
+## Testing
+
+- **Rust (protocol, transaction encoding, IPv6 address formatting):**
+  ```bash
+  cd hotline-tauri/src-tauri && cargo test
+  ```
+- **Frontend (Vitest — stores, utils):**
+  ```bash
+  cd hotline-tauri && npm run test
+  ```
+- Watch mode: `npm run test:watch`. Coverage: `npm run test:coverage`.
+
 ## Contributing
 
 Contributions are welcome! This project benefits from:

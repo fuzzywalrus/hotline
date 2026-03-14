@@ -5,6 +5,7 @@ import { usePreferencesStore } from '../../stores/preferencesStore';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import type { Bookmark, ServerBookmark } from '../../types';
 import EditBookmarkDialog from './EditBookmarkDialog';
+import BookmarkInfoDialog from './BookmarkInfoDialog';
 import { useContextMenu, ContextMenuRenderer, type ContextMenuItem } from '../common/ContextMenu';
 import {
   DndContext,
@@ -69,6 +70,7 @@ export default function BookmarkList({ bookmarks, searchQuery = '' }: BookmarkLi
   const [editingBookmark, setEditingBookmark] = useState<Bookmark | null>(null);
   const [addingBookmark, setAddingBookmark] = useState<Bookmark | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [infoBookmark, setInfoBookmark] = useState<Bookmark | null>(null);
   const [connectingId, setConnectingId] = useState<string | null>(null);
   const [connectionErrors, setConnectionErrors] = useState<Map<string, string>>(new Map());
   const [expandedTrackers, setExpandedTrackers] = useState<Set<string>>(new Set());
@@ -427,6 +429,11 @@ export default function BookmarkList({ bookmarks, searchQuery = '' }: BookmarkLi
                         },
                         { divider: true },
                         {
+                          label: 'Get Info',
+                          icon: 'ℹ️',
+                          action: () => setInfoBookmark(bookmark),
+                        },
+                        {
                           label: 'Edit Tracker...',
                           icon: '✏️',
                           action: () => setEditingBookmark(bookmark),
@@ -732,6 +739,11 @@ export default function BookmarkList({ bookmarks, searchQuery = '' }: BookmarkLi
                       },
                       { divider: true, label: '', action: () => {} },
                       {
+                        label: 'Get Info',
+                        icon: 'ℹ️',
+                        action: () => setInfoBookmark(bookmark),
+                      },
+                      {
                         label: 'Edit Bookmark...',
                         icon: '✏️',
                         action: () => setEditingBookmark(bookmark),
@@ -878,6 +890,14 @@ export default function BookmarkList({ bookmarks, searchQuery = '' }: BookmarkLi
           </div>
         </SortableContext>
       </DndContext>
+
+      {/* Info dialog */}
+      {infoBookmark && (
+        <BookmarkInfoDialog
+          bookmark={infoBookmark}
+          onClose={() => setInfoBookmark(null)}
+        />
+      )}
 
       {/* Edit dialog */}
       {editingBookmark && (

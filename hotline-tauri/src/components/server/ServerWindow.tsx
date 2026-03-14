@@ -31,7 +31,7 @@ interface ServerWindowProps {
 }
 
 export default function ServerWindow({ serverId, serverName, onClose }: ServerWindowProps) {
-  const { setFileCache, getFileCache, clearFileCache, clearFileCachePath, addTransfer, updateTransfer, updateTabTitle, serverInfo: serverInfoMap } = useAppStore();
+  const { setFileCache, getFileCache, clearFileCache, clearFileCachePath, addTransfer, updateTransfer, updateTabTitle, serverInfo: serverInfoMap, tabs } = useAppStore();
   const isTls = serverInfoMap.get(serverId)?.tls ?? false;
   const { enablePrivateMessaging, downloadFolder, showServerBanner } = usePreferencesStore();
   const [showTransferList, setShowTransferList] = useState(false);
@@ -72,6 +72,22 @@ export default function ServerWindow({ serverId, serverName, onClose }: ServerWi
   const [bannerUrl, setBannerUrl] = useState<string | null>(null);
   const [serverInfo, setServerInfo] = useState<ServerInfo | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('connecting');
+
+  // Check if tab has an initial file path to navigate to (from hotline:// URL)
+  const initialFilePath = useRef(
+    tabs.find(t => t.type === 'server' && t.serverId === serverId)?.initialFilePath
+  );
+  const [pendingFilePath, setPendingFilePath] = useState<string[] | undefined>(initialFilePath.current);
+
+  // Navigate to file path once agreement is cleared and connection is ready
+  useEffect(() => {
+    if (pendingFilePath && pendingFilePath.length > 0 && !agreementText && connectionStatus === 'logged-in') {
+      setActiveTab('files');
+      setCurrentPath(pendingFilePath);
+      currentPathRef.current = pendingFilePath;
+      setPendingFilePath(undefined);
+    }
+  }, [pendingFilePath, agreementText, connectionStatus]);
 
   // Debug: log when bannerUrl changes
   useEffect(() => {

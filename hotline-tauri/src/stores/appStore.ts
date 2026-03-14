@@ -26,6 +26,7 @@ export interface Tab {
   serverId?: string; // Only for server tabs
   title: string;
   unreadCount: number;
+  initialFilePath?: string[]; // Navigate to this path in Files tab on connect
 }
 
 interface AppState {

@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
 import { useContextMenu, ContextMenuRenderer, type ContextMenuItem } from '../common/ContextMenu';
 import { useIsMobile } from '../../hooks/useIsMobile';
+import FileInfoDialog from './FileInfoDialog';
 
 interface FileItem {
   name: string;
@@ -55,6 +56,7 @@ export default function FilesTab({
   const [searchResults, setSearchResults] = useState<Array<{ file: FileItem; path: string[] }>>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { contextMenu, showContextMenu, hideContextMenu } = useContextMenu();
+  const [fileInfoTarget, setFileInfoTarget] = useState<{ file: FileItem; path: string[] } | null>(null);
   const previewableExtensions = [
     // Images
     '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tif', '.tiff', '.webp', '.svg',
@@ -523,8 +525,7 @@ export default function FilesTab({
                         label: 'Get Info',
                         icon: 'ℹ️',
                         action: () => {
-                          // TODO: Implement file info dialog
-                          alert(`File: ${file.name}\nSize: ${file.size} bytes\nType: ${file.fileType || 'Unknown'}`);
+                          setFileInfoTarget({ file, path: 'path' in item ? (item as { path: string[] }).path : currentPath });
                         },
                       },
                       {
@@ -612,6 +613,20 @@ export default function FilesTab({
         )}
       </div>
       
+      {/* File info dialog */}
+      {fileInfoTarget && (
+        <FileInfoDialog
+          serverId={serverId}
+          fileName={fileInfoTarget.file.name}
+          fileSize={fileInfoTarget.file.size}
+          fileType={fileInfoTarget.file.fileType}
+          creator={fileInfoTarget.file.creator}
+          isFolder={fileInfoTarget.file.isFolder}
+          path={fileInfoTarget.path}
+          onClose={() => setFileInfoTarget(null)}
+        />
+      )}
+
       {/* Context menu */}
       <ContextMenuRenderer
         contextMenu={contextMenu}
