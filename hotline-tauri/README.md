@@ -2,7 +2,7 @@
 
 The Tauri/React/Rust client for the Hotline protocol — part of the [Hotline Navigator](https://github.com/fuzzywalrus/hotline) project. A modern, cross-platform client built with Tauri v2, React, and Rust.
 
-![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux%20%7C%20iOS%20%7C%20iPadOS-blue)
+![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux%20%7C%20iOS%20%7C%20iPadOS%20%7C%20Android-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 ## About
@@ -13,7 +13,7 @@ Hotline is a classic Internet protocol and community platform from the 1990s tha
 
 While the original Swift version provides a native macOS experience, this Tauri-based client offers:
 
-- **Cross-Platform Reach**: Runs on macOS, Windows, Linux, iOS, and iPadOS (Android planned) from a single codebase
+- **Cross-Platform Reach**: Runs on macOS, Windows, Linux, iOS, iPadOS, and Android from a single codebase
 - **Long-Term Sustainability**: Built on widely-supported technologies (React, Rust, Tauri v2)
 - **Broader Community**: Accessible to developers across all platforms
 - **Modern Tooling**: Benefits from the React and Rust ecosystems
@@ -41,6 +41,7 @@ This project complements the [original Swift client](https://github.com/mierau/h
 - ✅ **Context Menus**: Right-click actions throughout the app
 - ✅ **Dark Mode**: Full dark mode support
 - ✅ **Transfer List**: Track active and completed file transfers
+- ✅ **IPv6**: Connect to servers and trackers via IPv6 literals (e.g. `[::1]:5493`) and hostnames that resolve to AAAA
 
 ### TLS (Encrypted Connections)
 
@@ -71,7 +72,7 @@ To implement auto-detect TLS in your own client:
 
 ## Installation
 
-**Platform support:** macOS (x86_64, ARM64, Universal), Windows (x86_64), Linux (x86_64, ARM64), iOS, and iPadOS. Android is planned. See the [main project README](https://github.com/fuzzywalrus/hotline#platform-support) for details.
+**Platform support:** macOS (x86_64, ARM64, Universal), Windows (x86_64), Linux (x86_64, ARM64), iOS, iPadOS, and Android. Mobile builds are not in app stores and must be built or sideloaded. See the [main project README](https://github.com/fuzzywalrus/hotline#platform-support) for details.
 
 ### Prerequisites
 - **Node.js** 20+ (recommended for Vite 7 / modern Tauri tooling)
@@ -132,13 +133,22 @@ npm run build:macos-intel        # Intel (x86_64) only
 npm run build:macos-silicon      # Apple Silicon (aarch64) only
 ```
 
-**iOS / iPadOS** (requires Xcode and CocoaPods; see repo root for platform support):
+**iOS / iPadOS** (requires Xcode and CocoaPods; minimum iOS 15.0 in config; see repo root for sideloading):
 ```bash
 npm run ios:init                 # One-time: generate Xcode project
 npm run build:ios                # Build for device
 npm run build:ios-simulator      # Build for simulator
 npm run ios:dev                  # Run on device
-npm run ios:dev:simulator        # Run in simulator
+npm run ios:dev:simulator        # Run in simulator (default: iPad Pro 11-inch M4)
+```
+
+**Android** (requires Android SDK/NDK; see repo root for sideloading):
+```bash
+npm run android:init             # One-time: initialize Android project
+npm run build:android             # Build release APK
+npm run build:android-debug      # Build debug APK
+npm run build:android-aab        # Build App Bundle for Play Store
+npm run android:dev              # Run on device/emulator
 ```
 
 **Linux (including ARM64):**
@@ -325,6 +335,7 @@ MIT License - See LICENSE file for details
 
 ## Links
 
+- **Official Website**: https://hotline.greggant.com
 - **Hotline Navigator (this repo)**: https://github.com/fuzzywalrus/hotline
 - **Releases**: https://github.com/fuzzywalrus/hotline/releases
 - **Original Swift Client**: https://github.com/mierau/hotline
